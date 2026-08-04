@@ -1,3 +1,11 @@
+# build artifacts
 secure
 secure.mfl
+
+# scratch reports / verdict stores created while testing locally
 *.html
+.machin-secure.verdicts.json
+test/fixtures/.machin-secure.verdicts.json
+
+# os
+.DS_Store

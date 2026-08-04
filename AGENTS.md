@@ -54,7 +54,7 @@ by default (override with `--store PATH`), excluded from scanning itself.
 ```sh
 ./secure --target ./some/repo                          # JSONL findings on stdout
 ./secure --target ./some/repo --summary                 # one JSON summary object only
-./secure --target ./some/repo --hart                    # also publish an HTML report to hart.intrane.fr
+./secure --target ./some/repo --hart                    # print a hint for the agent to write+publish its own report to hart.intrane.fr
 ./secure --target ./some/repo --show-all                # include findings already verdicted 'drop'
 ./secure verdict --target ./some/repo <id> drop --reason "..."   # persist a false-positive judgment
 ./secure verdict --target ./some/repo --stdin           # batch verdicts via JSON Lines on stdin
@@ -98,7 +98,7 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   (e.g. `(?!...)`) as they'll silently no-op.
 - `json_get(json, path)` needs a leading `.` (e.g. `.url`, not `url`) and
   returns the raw JSON token — a string value comes back quoted; strip quotes
-  before use (see `strip_quotes` in secure.src).
+  before use if you add a call site that needs it.
 - MFL structs are pass-by-value; scanner state is kept in a package-level
   `var run = Run{...}` global rather than threaded through every function
   call, per `SPEC.md`'s documented global semantics.
@@ -110,4 +110,7 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 - `~/pr/multi-assistant` — 10,398 files scanned, 1950 findings including a
   real hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
 - `~/pr/v3` — 35,865 files scanned in ~13 min, 1680 findings.
-- `--hart` report published successfully to https://hart.intrane.fr.
+- Full non-interactive smoke test: `devin -p "..." --permission-mode dangerous`
+  ran `secure --hart` against this repo, read the hint, authored its own HTML
+  report, and published it to https://hart.intrane.fr/a/machin-secure/smoketest
+  end-to-end with zero manual steps.
