@@ -101,15 +101,16 @@ jobs:
 The action exits `0` whether or not findings exist (so the SARIF upload always
 runs); severity gating is left to GitHub code-scanning settings. Inputs:
 `target` (default `.`), `rules` (default: the bundled rule pack),
-`output` (default `machin-secure.sarif`).
+`output` (default `machin-secure.sarif`), `args` (default: empty — extra CLI
+flags, e.g. `--diff-base origin/main` to scan only changed files in a PR).
 
 Releases are cut by pushing a semver tag (`v2.0.0`); the
 [`release`](.github/workflows/release.yml) workflow builds the binary on
-ubuntu-latest, bundles it with `rules.json`, attaches the tarball to the
-release, and syncs the moving major tag (`v2`) to the same commit so
-`@v2` always resolves to the latest `v2.x`. Prefer the Docker image instead?
-`Dockerfile` + `entrypoint.sh` remain as a self-build recipe
-(`docker build -t machin-secure .`).
+ubuntu-22.04 (glibc 2.35, so it runs on both 22.04 and 24.04 runners), bundles
+it with `rules.json`, attaches the tarball to the release, and syncs the moving
+major tag (`v2`) to the same commit so `@v2` always resolves to the latest
+`v2.x`. Prefer the Docker image instead? `Dockerfile` + `entrypoint.sh` remain
+as a self-build recipe (`docker build -t machin-secure .`).
 
 ## The verdict loop (instead of an LLM filter)
 

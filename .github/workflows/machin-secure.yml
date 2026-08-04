@@ -17,11 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # --diff-base HEAD~1 needs the previous commit
 
       - name: Run machin-secure
         uses: javimosch/machin-secure@v2
         with:
+          # Scan only files changed since the previous commit — the documented
+          # CI pattern (see AGENTS.md "Scope"). A full walk would also scan
+          # rules.json (a 290 KB / 12k-line data file) and the checked-in
+          # binary, which is slow and pointless for a self-audit.
           target: '.'
+          args: '--diff-base HEAD~1'
 
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3

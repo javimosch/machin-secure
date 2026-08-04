@@ -17,6 +17,10 @@ inputs:
     description: 'Path to write the SARIF file (relative to the repo root)'
     required: false
     default: 'machin-secure.sarif'
+  args:
+    description: 'Extra CLI flags passed to `secure` (e.g. "--diff-base origin/main" to scan only changed files, "--workers 4"). See `secure --help`.'
+    required: false
+    default: ''
 outputs:
   sarif:
     description: 'Path to the generated SARIF file'
@@ -58,10 +62,12 @@ runs:
         TARGET: ${{ inputs.target }}
         RULES: ${{ inputs.rules }}
         OUTPUT: ${{ inputs.output }}
+        EXTRA_ARGS: ${{ inputs.args }}
       run: |
         set +e
         RULES_PATH="${RULES:-$TOOL_DIR/rules.json}"
-        "$TOOL_DIR/secure" --sarif --target "$TARGET" --rules "$RULES_PATH" > "$OUTPUT"
+        # shellcheck disable=SC2086  # intentional word-splitting of EXTRA_ARGS
+        "$TOOL_DIR/secure" --sarif --target "$TARGET" --rules "$RULES_PATH" $EXTRA_ARGS > "$OUTPUT"
         code=$?
         set -e
         if [ "$code" = "1" ]; then
