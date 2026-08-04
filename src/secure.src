@@ -53,6 +53,9 @@ type VerdictRec struct {
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
 var want_show_all = false
+// lang -> applicable rules, built once per distinct lang instead of once per
+// file (avoids re-walking all rules for every one of tens of thousands of files)
+var lang_rules_cache = make(map[string][]Rule)
 
 // ---- helpers ----
 
@@ -168,12 +171,16 @@ func rule_applies(rule, lang) (b) {
 
 // ---- file scan ----
 
-// pre-filter rules to those applicable to a lang (called once per file, not per line)
+// pre-filter rules to those applicable to a lang, cached: with tens of
+// thousands of files but only a dozen or so distinct langs, this turns
+// O(files x rules) filtering into O(distinct-langs x rules).
 func rules_for_lang(rules, lang) (out) {
+	if has(lang_rules_cache, lang) { out = lang_rules_cache[lang] ; return }
 	out = []Rule{}
 	for _, rule := range rules {
 		if rule_applies(rule, lang) { out = append(out, rule) }
 	}
+	lang_rules_cache[lang] = out
 }
 
 func scan_file(path, lang, rules) {
@@ -185,9 +192,10 @@ func scan_file(path, lang, rules) {
 	if len(applicable) == 0 { return }
 	lines := split(src, "\n")
 	for i, line := range lines {
+		trimmed := trim(line)
+		if trimmed == "" { continue }
 		for _, rule := range applicable {
 			if regex_match(line, rule.pattern) {
-				trimmed := trim(line)
 				id := sha256(rule.id + "|" + path + "|" + trimmed)
 				v := verdict_map[id]
 				if v == "drop" {
@@ -210,6 +218,35 @@ func scan_file(path, lang, rules) {
 				run.findings = append(run.findings, f)
 			}
 		}
+	}
+}
+
+// ---- diff mode: scan only git-changed files, for fast CI/pre-commit checks ----
+// `--diff` alone: working-tree changes vs HEAD (local dev, pre-commit).
+// `--diff-base <ref>`: changes vs a base branch/commit (CI, PR diff), using
+// git's triple-dot (merge-base) form so unrelated upstream commits on the
+// base don't show up as "changed".
+
+func diff_scan(target, base, rules) {
+	cmd := "git -C " + target + " diff --name-only"
+	if base != "" { cmd = cmd + " " + base + "...HEAD" }
+	code, out, errout := exec(cmd)
+	if code != 0 {
+		println("{\"error\":\"git diff failed: " + trim(errout) + "\"}")
+		exit(1)
+	}
+	paths := split(out, "\n")
+	for _, p := range paths {
+		rel := trim(p)
+		if rel == "" { continue }
+		full := target + "/" + rel
+		k, size, _ := stat(full)
+		if k != 1 { continue }  // deleted/renamed-away files won't stat as a file
+		if has_suffix(rel, ".machin-secure.verdicts.json") { continue }
+		if size > 1000000 { run.skipped = run.skipped + 1 ; continue }
+		lang := lang_of(full)
+		if lang == "" { continue }
+		scan_file(full, lang, rules)
 	}
 }
 
@@ -390,6 +427,8 @@ func main() {
 	hart_owner := "machin-secure"
 	hart_artifact := "audit"
 	store_path := ""
+	want_diff := false
+	diff_base := ""
 	help := false
 
 	i := 1
@@ -403,6 +442,8 @@ func main() {
 		if arg == "--hart-artifact" { i = i + 1 ; if i < len(a) { hart_artifact = a[i] } }
 		if arg == "--store" { i = i + 1 ; if i < len(a) { store_path = a[i] } }
 		if arg == "--show-all" { want_show_all = true }
+		if arg == "--diff" { want_diff = true }
+		if arg == "--diff-base" { want_diff = true ; i = i + 1 ; if i < len(a) { diff_base = a[i] } }
 		if arg == "--help" || arg == "-h" { help = true }
 		if has_prefix(arg, "-") == false && target == "" && i > 0 { target = arg }
 		i = i + 1
@@ -424,6 +465,9 @@ func main() {
 		println("  --summary            print only a summary JSON object, no per-finding lines")
 		println("  --show-all           include findings the agent already marked 'drop'")
 		println("  --store PATH         verdict store (default: <target-dir>/.machin-secure.verdicts.json)")
+		println("  --diff               scan only files changed in the working tree (git diff --name-only)")
+		println("  --diff-base REF      scan only files changed vs REF (git diff --name-only REF...HEAD),")
+		println("                       for CI/PR-scoped scans; implies --diff. Target must be a git repo.")
 		println("  --hart               print guidance for publishing your own HTML report to")
 		println("                       hart.intrane.fr (default instance). This tool does not")
 		println("                       author or publish the report — your own model does,")
@@ -454,14 +498,21 @@ func main() {
 	run.rules_n = len(rules)
 
 	k, _, _ := stat(target)
-	if k == 1 {
-		lang := lang_of(target)
-		if lang != "" { scan_file(target, lang, rules) }
-	} else if k == 2 {
-		walk(target, rules, 0)
-	} else {
+	if k == 0 {
 		println("{\"error\":\"target not found: " + target + "\"}")
 		exit(1)
+	}
+	if want_diff {
+		if k != 2 {
+			println("{\"error\":\"--diff requires a directory target (a git repo root)\"}")
+			exit(1)
+		}
+		diff_scan(target, diff_base, rules)
+	} else if k == 1 {
+		lang := lang_of(target)
+		if lang != "" { scan_file(target, lang, rules) }
+	} else {
+		walk(target, rules, 0)
 	}
 
 	if want_summary {

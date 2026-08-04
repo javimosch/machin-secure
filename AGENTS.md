@@ -84,11 +84,24 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 
 ## Known limitations / next steps (only build if actually needed)
 
-- **Perf**: full recursive scan of a very large repo (35k+ files) takes
-  minutes (O(files × lines × applicable-rules) with the Go regexp-free POSIX
-  ERE engine, no rule/line pre-indexing). Fine for local/CI use; a `--diff`
-  mode (scan only `git diff --name-only` files) would fix CI latency without
-  adding architecture — do that before anything fancier.
+- **Perf**: full recursive scan of a very large repo (35k+ files) still takes
+  minutes (O(files × lines × applicable-rules), no rule/line pre-indexing) —
+  fine for occasional full audits. For the common case (CI, pre-commit, "what
+  did I just change"), use `--diff` / `--diff-base <ref>` instead of a full
+  scan: it scans only `git diff --name-only` files. Measured on a 10.4k-file
+  repo with 8 changed files: **0.23s vs ~4-5 min** for a full scan — this is
+  the actual fix for CI latency, not a faster full-tree engine. Two cheap,
+  correctness-preserving optimizations also ship in the core engine: a
+  `lang_rules_cache` (build each language's applicable-rule subset once,
+  not once per file — was O(files × rules) just to filter, now O(langs ×
+  rules)) and skipping the rule loop entirely on blank/whitespace-only lines.
+  Both were verified to produce byte-identical findings on the fixtures and
+  a full run against a 10k-file repo (1950 findings, same severity
+  breakdown) before and after.
+  `--diff` scopes at the **file** level, not the diff hunk: a changed file's
+  pre-existing findings are reported too, not just the new lines. That's
+  intentional for a KISS tool — hunk-level scoping would need diff parsing
+  and doesn't change the complexity story enough to be worth it yet.
 - **False positives**: rules like `js-hardcoded-secret` and `sql-string-concat`
   fire on Vue prop bindings, test fixtures, and other benign matches (verified
   against `~/pr/multi-assistant`). This is what `secure verdict` is for — the

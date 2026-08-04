@@ -45,6 +45,8 @@ none of the infrastructure, cost, or attack surface.
 ./secure --target ./some/repo --summary                 # one JSON summary object
 ./secure --target ./some/repo --show-all                # include already-dropped findings
 ./secure --target ./some/repo --hart                    # print guidance for the agent's own hart report
+./secure --target ./some/repo --diff                    # scan only working-tree-changed files (fast, CI/pre-commit)
+./secure --target ./some/repo --diff-base origin/main   # scan only files changed vs a base ref (PR-scoped CI)
 
 ./secure verdict --target ./some/repo <id> drop --reason "..."   # persist the agent's judgment
 ./secure verdict --target ./some/repo --stdin           # batch verdicts via JSON Lines
@@ -82,7 +84,8 @@ without recompiling.
 - Synthetic fixtures (`test/fixtures/`) — all expected findings fire.
 - A 10k-file production Node.js monorepo — 1,950 findings including a real
   hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
-- A 36k-file Vue/TS monorepo — full scan in ~13 min.
+- A 36k-file Vue/TS monorepo — full scan in ~13 min; a 10.4k-file repo with
+  8 changed files scans via `--diff` in **0.23s**.
 - A fully non-interactive `devin -p ... --permission-mode dangerous` run:
   scan → read hint → author HTML report → publish to hart.intrane.fr, with
   zero manual steps.
