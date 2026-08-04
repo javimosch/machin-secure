@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>machin-secure — KISS agent-first security auditor</title>
+<meta name="description" content="A deterministic regex security auditor where the tool owns no model — the calling agent IS the LLM. Single ~88KB binary, 84 CWE-tagged rules across 16 languages, SARIF 2.1.0 for GitHub Code Scanning.">
+<meta property="og:title" content="machin-secure — the tool owns no model, the agent is the LLM">
+<meta property="og:description" content="KISS agent-first security auditor. 84 CWE-tagged rules, 16 languages, SARIF 2.1.0, reusable GitHub Action. Built with machin/MFL.">
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#12161d; --border:#222932; --fg:#e6edf3;
+    --muted:#8b97a4; --accent:#58e1a5; --accent2:#7aa2ff; --code:#070a0e;
+    --crit:#f87171; --high:#fbbf24; --med:#60a5fa; --low:#8b97a4;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
+  header{padding:72px 0 24px;text-align:center}
+  .badge{display:inline-block;font-size:12px;color:var(--accent);
+    border:1px solid var(--border);border-radius:999px;padding:3px 12px;margin-bottom:20px}
+  h1{font-size:clamp(36px,6vw,58px);margin:0;letter-spacing:-1.5px}
+  .tag{color:var(--muted);font-size:19px;margin:14px 0 10px}
+  .tag b{color:var(--fg)} .tag i{color:var(--accent);font-style:normal}
+  .cta{margin-top:24px}
+  .cta a{display:inline-block;margin:0 5px 8px;padding:10px 18px;border-radius:8px;
+    border:1px solid var(--border);font-weight:600}
+  .cta a.primary{background:var(--accent);color:#04150e;border-color:var(--accent)}
+  section{padding:34px 0;border-top:1px solid var(--border)}
+  h2{font-size:24px;letter-spacing:-.4px;margin:0 0 10px}
+  p.lead{color:var(--muted);margin-top:0}
+  .cap{font-size:12px;color:var(--muted);margin:8px 2px 0}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(2,1fr);margin-top:6px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .card h3{margin:0 0 6px;font-size:16px} .card p{margin:0;color:var(--muted);font-size:14px}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:13.5px;color:#cdd9e5}
+  .cm{color:#6b7785}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin-top:6px}
+  td,th{border:1px solid var(--border);padding:8px 12px;text-align:left}
+  th{color:var(--muted);font-weight:600} td.n,th.n{text-align:right}
+  .sev{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+  .sev.crit{background:rgba(248,113,113,.15);color:var(--crit)}
+  .sev.high{background:rgba(251,191,36,.15);color:var(--high)}
+  .sev.med{background:rgba(96,165,250,.15);color:var(--med)}
+  .sev.low{background:rgba(139,151,164,.15);color:var(--low)}
+  .lang{display:inline-block;font-size:12px;color:var(--accent2);
+    border:1px solid var(--border);border-radius:4px;padding:1px 7px;margin:2px}
+  .announce{max-width:680px;margin:20px auto 0;padding:14px 18px;text-align:left;
+    background:linear-gradient(180deg,rgba(88,225,165,.08),rgba(122,162,255,.06));
+    border:1px solid var(--accent);border-radius:12px}
+  .announce b{color:var(--accent)} .announce .k{color:var(--accent2);font-weight:700}
+  footer{padding:40px 0 70px;color:var(--muted);font-size:14px;text-align:center;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="badge">v1.0.0 · 84 rules · 16 languages · SARIF 2.1.0</div>
+  <h1>machin-secure</h1>
+  <p class="tag">A security auditor where the tool owns <b>no model</b> — the calling agent <i>is</i> the LLM.<br>
+    Single ~88&nbsp;KB binary. Deterministic regex rules. Agent-managed verdicts. CI-native.</p>
+  <div class="announce">
+    <b>The KISS lesson, applied to SAST.</b> A deterministic regex engine over the
+    filesystem finds most of what a heavyweight agent finds — <span class="k">no Docker,
+    no browser, no LLM API client inside the tool</span>. The agent driving
+    <code>secure</code> already has a model; it reads the findings, reasons, and
+    writes back a verdict that persists across scans.
+    <a href="VISION.html">Read the vision →</a>
+  </div>
+  <div class="cta">
+    <a class="primary" href="https://github.com/javimosch/machin-secure">GitHub</a>
+    <a href="#usage">Usage</a>
+    <a href="#rules">Rules</a>
+    <a href="#ci">CI / SARIF</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="VISION.html">Vision</a>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<section id="split">
+  <h2>The split — tool owns the scan, agent owns the judgment</h2>
+  <p class="lead">Every finding carries a stable <code>id</code> (<code>sha256(rule|file|line)</code>). The tool never calls an LLM to triage its own false positives — the calling agent does it with the model it already has, and persists the call.</p>
+<pre><span class="cm">#!/ the whole loop, no API key, no network call to a model provider</span>
+./secure --target .                          <span class="cm"># JSONL findings on stdout</span>
+./secure --target . <span class="cm">| jq 'select(.severity=="critical")'</span>
+<span class="cm"># agent reasons: this one is a Vue prop binding, not a secret</span>
+./secure verdict --target . &lt;id&gt; drop --reason "Vue prop binding, not a secret"
+<span class="cm"># future scans suppress it automatically; --show-all brings it back</span></pre>
+  <p class="cap">Same BYOK split as <a href="https://github.com/javimosch/grepapi">grepapi</a>'s <code>/v1/brief</code>: the tool returns structured data, the operator's own LLM completes the reasoning.</p>
+</section>
+
+<section id="perf">
+  <h2>Measured, not asserted</h2>
+  <p class="lead">Two independent levers, aimed at two different situations — scope for CI, parallelism for full audits.</p>
+  <table>
+    <tr><th>scan mode</th><th class="n">10.4k-file repo</th><th class="n">findings</th></tr>
+    <tr><td><b>--diff</b> (8 changed files)</td><td class="n">0.23s</td><td class="n">same 1950</td></tr>
+    <tr><td>full scan, 1 worker</td><td class="n">~4m37s</td><td class="n">1950</td></tr>
+    <tr><td>full scan, 8 workers</td><td class="n">1m28s</td><td class="n">1950</td></tr>
+  </table>
+  <p class="cap">Byte-identical findings every way. <code>--diff</code> is the actual fix for CI latency; the engine didn't need to get faster for this case to be fast.</p>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+<pre>./build.sh                                              <span class="cm"># machin encode + build -> ./secure</span>
+
+./secure --target ./some/repo                           <span class="cm"># JSONL findings on stdout</span>
+./secure --target ./some/repo --summary                 <span class="cm"># one JSON summary object</span>
+./secure --target ./some/repo --sarif                   <span class="cm"># SARIF 2.1.0 (GitHub Code Scanning)</span>
+./secure --target ./some/repo --diff                    <span class="cm"># only working-tree-changed files</span>
+./secure --target ./some/repo --diff-base origin/main   <span class="cm"># only files changed vs a base ref (PR CI)</span>
+./secure --target ./some/repo --workers 16              <span class="cm"># parallel full-audit (default: 8)</span>
+./secure --target ./some/repo --hart                    <span class="cm"># guidance for the agent's own hart report</span>
+
+./secure verdict --target . &lt;id&gt; drop --reason "..."   <span class="cm"># persist the agent's judgment</span>
+./secure verdict --target . --stdin                     <span class="cm"># batch verdicts via JSON Lines</span></pre>
+  <p class="cap">Exit codes: <code>0</code> clean · <code>1</code> error · <code>2</code> high/critical findings present.</p>
+</section>
+
+<section id="rules">
+  <h2>84 CWE-tagged detections across 16 languages</h2>
+  <p class="lead"><code>rules.json</code> is plain data, read fresh from disk every run — extend it without recompiling. The rule pack is the actual product; the engine is interchangeable.</p>
+  <div class="grid">
+    <div class="card"><h3>Secrets</h3><p><span class="sev crit">CWE-798</span> AWS, Google, Slack, GitHub PAT, Stripe, JWT, private keys, generic high-entropy, connection strings with embedded creds.</p></div>
+    <div class="card"><h3>Injection</h3><p><span class="sev high">CWE-78/89/95</span> command injection (shell=True, eval, exec, os.system, Runtime.exec, Command::new), SQL injection (string concat, f-strings, template interp).</p></div>
+    <div class="card"><h3>Deserialization</h3><p><span class="sev high">CWE-502</span> pickle, yaml.load, ObjectInputStream, PHP unserialize, Ruby YAML.load.</p></div>
+    <div class="card"><h3>XSS / SSRF / XXE</h3><p><span class="sev med">CWE-79/918/611</span> dangerouslySetInnerHTML, innerHTML, document.write, template.HTML, HTTP concat URLs, XML external entities.</p></div>
+    <div class="card"><h3>Weak crypto / TLS</h3><p><span class="sev med">CWE-327/295</span> MD5, SHA-1, DES, InsecureSkipVerify, rejectUnauthorized:false, verify=False, trust-all certs.</p></div>
+    <div class="card"><h3>Memory safety</h3><p><span class="sev high">CWE-120/242</span> strcpy, strcat, sprintf, gets, Rust unsafe blocks.</p></div>
+    <div class="card"><h3>Config / CORS</h3><p><span class="sev med">CWE-942/250</span> CORS wildcard, container root user, debug mode, cookies without HttpOnly/Secure.</p></div>
+    <div class="card"><h3>Path traversal / redirect</h3><p><span class="sev med">CWE-22/601</span> open() with .., fs read with interpolated path, redirect from user input.</p></div>
+  </div>
+  <p style="margin-top:14px">
+    <span class="lang">Python</span><span class="lang">JS/TS</span><span class="lang">Vue</span><span class="lang">Go</span><span class="lang">Rust</span><span class="lang">C/C++</span><span class="lang">C#</span><span class="lang">Java/Kotlin</span><span class="lang">Ruby</span><span class="lang">Shell</span><span class="lang">Swift</span><span class="lang">PHP</span><span class="lang">YAML</span><span class="lang">Dockerfile</span><span class="lang">XML</span><span class="lang">JSON</span>
+  </p>
+</section>
+
+<section id="ci">
+  <h2>CI / GitHub Code Scanning</h2>
+  <p class="lead"><code>--sarif</code> emits a SARIF 2.1.0 report (validated against the official schema) that GitHub's Security tab, VS Code, and any SARIF consumer read directly. There's a reusable GitHub Action — drop this into any repo:</p>
+<pre><span class="cm"># .github/workflows/machin-secure.yml</span>
+name: machin-secure
+on: [push, pull_request]
+permissions:
+  contents: read
+  security-events: write   <span class="cm"># required to upload SARIF</span>
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: javimosch/machin-secure@v1
+        with:
+          target: '.'
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: machin-secure.sarif
+          category: machin-secure</pre>
+  <p class="cap">The action exits 0 whether or not findings exist (so the SARIF upload always runs); severity gating is left to GitHub code-scanning settings.</p>
+</section>
+
+<section>
+  <h2>What it is NOT (on purpose)</h2>
+  <div class="grid">
+    <div class="card"><h3>No LLM client</h3><p>No OpenAI/OpenRouter key, no budget, no network call to a model provider. The agent driving <code>secure</code> already is an LLM.</p></div>
+    <div class="card"><h3>No Docker / browser</h3><p>Read-only static analysis. Never executes target code, never mutates the target repo.</p></div>
+    <div class="card"><h3>No index / database</h3><p>The filesystem is scanned fresh every time — freshness over sophistication. The one persistent state is the agent's verdict memory.</p></div>
+    <div class="card"><h3>No report generation</h3><p><code>--hart</code> prints guidance for the agent to author and publish its own HTML report with its own model. The tool doesn't bake prose judgment into a binary that owns none.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Built with</h2>
+  <p class="lead"><a href="https://github.com/javimosch/machin">machin</a> / MFL — a language optimized for the AI agent writing it. The scanner is ~500 lines of MFL, compiled to a single ~88&nbsp;KB static binary. <a href="VISION.html">Read the vision &amp; north star →</a></p>
+</section>
+
+</div>
+
+<footer><div class="wrap">
+  <a href="https://github.com/javimosch/machin-secure">GitHub</a> ·
+  <a href="changelog.html">Changelog</a> ·
+  <a href="VISION.html">Vision</a> ·
+  <a href="https://github.com/javimosch/machin-secure/blob/main/AGENTS.md">AGENTS.md</a> ·
+  MIT License
+</div></footer>
+</body>
+</html>

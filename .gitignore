@@ -3,7 +3,8 @@ secure
 secure.mfl
 
 # scratch reports / verdict stores created while testing locally
-*.html
+# (scope *.html to repo root so docs/*.html is tracked)
+/*.html
 .machin-secure.verdicts.json
 test/fixtures/.machin-secure.verdicts.json
 machin-secure.sarif

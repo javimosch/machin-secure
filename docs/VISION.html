@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>machin-secure — Vision &amp; North Star</title>
+<meta name="description" content="A security auditor where the tool owns no model — the calling agent IS the LLM. The north star, design principles, and roadmap.">
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#12161d; --border:#222932; --fg:#e6edf3;
+    --muted:#8b97a4; --accent:#58e1a5; --accent2:#7aa2ff; --code:#070a0e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+  header{padding:48px 0 16px;border-bottom:1px solid var(--border)}
+  header h1{font-size:32px;margin:0;letter-spacing:-1px}
+  header .sub{color:var(--muted);font-size:15px;margin:6px 0 0}
+  header nav{margin-top:14px;font-size:14px}
+  header nav a{margin-right:14px}
+  .quote{border-left:3px solid var(--accent);padding:4px 0 4px 18px;margin:24px 0;
+    font-size:18px;color:var(--accent)}
+  h2{font-size:22px;margin:36px 0 10px;letter-spacing:-.3px}
+  h3{font-size:17px;margin:24px 0 6px}
+  p{color:var(--fg)} .lead{color:var(--muted)}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:13.5px;color:#cdd9e5}
+  code{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:14px}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:10px 0}
+  td,th{border:1px solid var(--border);padding:8px 12px;text-align:left}
+  th{color:var(--muted);font-weight:600}
+  ul,ol{color:var(--fg)} li{margin:4px 0}
+  .check{color:var(--accent)} .todo{color:var(--muted)}
+  footer{padding:30px 0 60px;color:var(--muted);font-size:14px;text-align:center;border-top:1px solid var(--border);margin-top:40px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>machin-secure — Vision &amp; North Star</h1>
+  <p class="sub">Source: <a href="https://github.com/javimosch/machin-secure/blob/main/docs/VISION.md">VISION.md</a> on GitHub</p>
+  <nav>
+    <a href="index.html">← Landing</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="https://github.com/javimosch/machin-secure">GitHub</a>
+  </nav>
+</header>
+
+<blockquote class="quote">A security auditor where the tool owns <b>no model</b> — the calling agent <i>is</i> the LLM.</blockquote>
+
+<h2>The problem</h2>
+<p>Static analysis tools fall into two camps, both broken for agent-first use:</p>
+<ol>
+  <li><b>Heavyweight SAST</b> (Semgrep, CodeQL, Strix): powerful, but they own the whole pipeline — the rules, the triage, sometimes the LLM call that filters false positives. They need a server, a database, a Docker sandbox, or an API key. An agent that already <i>is</i> an LLM ends up paying for a second LLM inside the tool, or fighting the tool's opinions about what matters.</li>
+  <li><b>Grep-in-a-loop</b>: cheap, but no structure — no stable finding IDs, no persisted verdicts, no CI integration, no severity taxonomy. Every run starts from zero; the agent re-triages the same false positives forever.</li>
+</ol>
+
+<h2>The north star</h2>
+<p><b>The tool owns the deterministic part. The agent owns the judgment.</b></p>
+<pre><code>rules.json (the moat) --&gt; secure binary (the engine) --&gt; JSONL / SARIF findings
+                                                              |
+                                          calling agent reads + reasons (its own LLM)
+                                                              |
+                                     secure verdict &lt;id&gt; keep|drop --&gt; persisted store</code></pre>
+<p><code>secure</code> is a regex engine with stable finding IDs and a persisted verdict store. It never calls an LLM, never holds an API key, never makes a network call to a model provider. The agent driving <code>secure</code> (Devin, Claude Code, any coding agent) already has a model — it reads the findings, reasons with its own context, and writes back a verdict that survives across scans.</p>
+
+<h2>What this means in practice</h2>
+<table>
+  <tr><th>Decision</th><th>Consequence</th></tr>
+  <tr><td>No LLM client in the tool</td><td>No API key, no budget, no network call. The agent's own model is the filter.</td></tr>
+  <tr><td><code>rules.json</code> is data, not code</td><td>Add detections without recompiling. The rule pack is the actual product.</td></tr>
+  <tr><td>Stable finding IDs (<code>sha256(rule|file|line)</code>)</td><td>Verdicts persist across scans, across machines, across agents.</td></tr>
+  <tr><td>SARIF 2.1.0 output</td><td>Drops into GitHub Code Scanning, VS Code, any SARIF consumer. CI-native.</td></tr>
+  <tr><td><code>--diff</code> / <code>--diff-base</code></td><td>Scans only changed files — 0.23s on a 10k-file repo with 8 changed files. The actual fix for CI latency.</td></tr>
+  <tr><td>No Docker, no browser, no sandbox</td><td>Read-only static analysis. Never executes target code, never mutates the repo.</td></tr>
+</table>
+
+<h2>What it is NOT (on purpose)</h2>
+<ul>
+  <li><b>Not an agent loop.</b> No tool-calling LLM, no multi-step reasoning inside the tool. The agent that runs <code>secure</code> does the reasoning; <code>secure</code> does the scanning.</li>
+  <li><b>Not a report generator.</b> <code>--hart</code> prints guidance for the agent to author and publish its own HTML report with its own model. The tool doesn't bake prose-generation judgment into a binary that otherwise owns none.</li>
+  <li><b>Not an index or database.</b> The filesystem is scanned fresh every time — freshness over sophistication. The one piece of state that persists is the verdict store, and only because it's the <i>agent's</i> memory, not a cache the tool invents.</li>
+  <li><b>Not AST-based (yet).</b> Regex over lines is v0 — deterministic, fast, and good enough for the patterns that matter most. Tree-sitter precision is a possible v2, but it breaks the single-binary KISS model and the agent-verdict filter already handles false positives. KISS first; complexity only when it earns its keep.</li>
+</ul>
+
+<h2>The moat</h2>
+<p>The scanner is ~500 lines of MFL. <b><code>rules.json</code> is the actual product.</b> The detection quality lives in the rule pack — the patterns, the CWE tags, the severity calibration, the language coverage. The engine is interchangeable; the rules are the accumulated knowledge. This is why the rules are plain data read fresh from disk every run: the moat must be editable without recompiling the engine.</p>
+
+<h2>Roadmap (only build what earns its keep)</h2>
+<ul>
+  <li class="check">✅ <b>v0 — deterministic regex engine</b>: JSONL findings, stable IDs, exit codes.</li>
+  <li class="check">✅ <b>v1 — agent-managed verdicts</b>: <code>secure verdict keep|drop</code>, persisted store, <code>--show-all</code>.</li>
+  <li class="check">✅ <b>v2 — performance</b>: <code>--diff</code> / <code>--diff-base</code> for CI, <code>--workers N</code> for parallel full scans.</li>
+  <li class="check">✅ <b>v3 — CI integration</b>: SARIF 2.1.0 output, reusable GitHub Action, <code>security-events: write</code>.</li>
+  <li class="check">✅ <b>v4 — rule pack expansion</b>: 84 CWE-tagged detections across 16 languages.</li>
+  <li class="todo">⬜ <b>Baseline mode</b>: snapshot current findings as accepted state; future runs surface only <i>new</i> findings. Pairs with <code>--diff</code> — the path to usable static analysis in real codebases.</li>
+  <li class="todo">⬜ <b>Community rule packs</b>: split <code>rules.json</code> into per-language or per-framework packs that can be contributed independently of the engine.</li>
+  <li class="todo">⬜ <b>Tree-sitter precision</b> (maybe): AST-based matching for fewer false positives. High effort, breaks single-binary KISS — only if the agent-verdict filter proves insufficient in practice.</li>
+</ul>
+
+<h2>Design principles</h2>
+<ol>
+  <li><b>KISS.</b> The 15-lines-of-bash lesson: a deterministic regex engine over the filesystem finds most of what a heavyweight agent finds, with none of the infrastructure, cost, or attack surface. Complexity only when it earns its keep.</li>
+  <li><b>Agent-first.</b> Output is JSONL/SARIF, not prose. No TUI, no dashboard. The tool is shaped for an agent to pipe, parse, and act on — not for a human to stare at.</li>
+  <li><b>BYOK.</b> The tool never duplicates the LLM the operator already has. No model client, no API key, no network call to a provider. The agent is the LLM.</li>
+  <li><b>Data over code.</b> The rules are the moat; the engine is interchangeable. Edit detections without recompiling.</li>
+  <li><b>Freshness over sophistication.</b> No index, no database, no run journal. Scan the filesystem every time. The one persistent state is the agent's own verdict memory.</li>
+</ol>
+
+<footer>
+  <a href="index.html">← Landing</a> ·
+  <a href="changelog.html">Changelog</a> ·
+  <a href="https://github.com/javimosch/machin-secure">GitHub</a> ·
+  MIT License
+</footer>
+</div>
+</body>
+</html>
