@@ -47,6 +47,7 @@ none of the infrastructure, cost, or attack surface.
 ./secure --target ./some/repo --hart                    # print guidance for the agent's own hart report
 ./secure --target ./some/repo --diff                    # scan only working-tree-changed files (fast, CI/pre-commit)
 ./secure --target ./some/repo --diff-base origin/main   # scan only files changed vs a base ref (PR-scoped CI)
+./secure --target ./some/repo --workers 16              # parallel full-audit scan (default: 8 workers)
 
 ./secure verdict --target ./some/repo <id> drop --reason "..."   # persist the agent's judgment
 ./secure verdict --target ./some/repo --stdin           # batch verdicts via JSON Lines
@@ -82,10 +83,11 @@ without recompiling.
 ## Verified against
 
 - Synthetic fixtures (`test/fixtures/`) — all expected findings fire.
-- A 10k-file production Node.js monorepo — 1,950 findings including a real
-  hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
-- A 36k-file Vue/TS monorepo — full scan in ~13 min; a 10.4k-file repo with
-  8 changed files scans via `--diff` in **0.23s**.
+- A 10.4k-file production Node.js monorepo — 1,950 findings including a real
+  hardcoded GitHub PAT and private-key material in `.env.*.bak` files. Full
+  parallel scan (8 workers): **1m28s** (down from ~4m37s single-threaded).
+  `--diff` with 8 changed files: **0.23s**. Same 1,950 findings every way.
+- A 36k-file Vue/TS monorepo — full scan in ~13 min pre-parallelization.
 - A fully non-interactive `devin -p ... --permission-mode dangerous` run:
   scan → read hint → author HTML report → publish to hart.intrane.fr, with
   zero manual steps.

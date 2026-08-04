@@ -84,24 +84,40 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 
 ## Known limitations / next steps (only build if actually needed)
 
-- **Perf**: full recursive scan of a very large repo (35k+ files) still takes
-  minutes (O(files × lines × applicable-rules), no rule/line pre-indexing) —
-  fine for occasional full audits. For the common case (CI, pre-commit, "what
-  did I just change"), use `--diff` / `--diff-base <ref>` instead of a full
-  scan: it scans only `git diff --name-only` files. Measured on a 10.4k-file
-  repo with 8 changed files: **0.23s vs ~4-5 min** for a full scan — this is
-  the actual fix for CI latency, not a faster full-tree engine. Two cheap,
-  correctness-preserving optimizations also ship in the core engine: a
-  `lang_rules_cache` (build each language's applicable-rule subset once,
-  not once per file — was O(files × rules) just to filter, now O(langs ×
-  rules)) and skipping the rule loop entirely on blank/whitespace-only lines.
-  Both were verified to produce byte-identical findings on the fixtures and
-  a full run against a 10k-file repo (1950 findings, same severity
-  breakdown) before and after.
-  `--diff` scopes at the **file** level, not the diff hunk: a changed file's
-  pre-existing findings are reported too, not just the new lines. That's
-  intentional for a KISS tool — hunk-level scoping would need diff parsing
-  and doesn't change the complexity story enough to be worth it yet.
+- **Perf**: two independent levers, aimed at two different situations.
+  - **Scope**: for the common case (CI, pre-commit, "what did I just
+    change"), use `--diff` / `--diff-base <ref>` instead of a full scan — it
+    scans only `git diff --name-only` files. Measured on a 10.4k-file repo
+    with 8 changed files: **0.23s vs minutes** for a full scan. This is the
+    actual fix for CI latency; nothing about the engine needed to get faster
+    for this case to be fast.
+  - **Parallelism**: for an occasional full audit, `parallel_walk` spreads
+    file scanning across `--workers` goroutines (default 8, one worker
+    pool, `run` mutated only by the single collecting goroutine after each
+    worker's `WorkerResult` arrives on a channel — the machin-idiomatic
+    "share by communicating" pattern; `machin check` confirms it's race-free
+    with zero annotations). Measured on the same 10.4k-file repo: **~4m37s
+    single-threaded engine baseline down to 1m28s wall-clock with 8 workers**
+    on an 8-core box (`user` time ~10m — genuinely parallel, not
+    coincidental). Two cheap, correctness-preserving micro-opts ship too: a
+    precomputed lang→rules index (built once before workers start, so no
+    worker ever writes a shared map — `O(files × rules)` filtering became
+    `O(langs × rules)`) and skipping the rule loop entirely on
+    blank/whitespace-only lines. All of the above were verified to produce
+    byte-identical findings (1950, same severity breakdown) against the
+    10k-file repo before and after, plus 14/14 on the fixtures.
+  - Single-file targets and `--diff` stay single-threaded (`scan_file`,
+    unchanged) — not enough files in those paths for a worker pool to pay
+    for its own overhead.
+  - `--diff` scopes at the **file** level, not the diff hunk: a changed
+    file's pre-existing findings are reported too, not just the new lines.
+    Intentional for a KISS tool — hunk-level scoping would need diff parsing
+    and doesn't change the complexity story enough to be worth it yet.
+  - Not done, and not obviously worth it next: per-rule literal-substring
+    pre-filtering before invoking `regex_match` (would cut regex calls
+    further but adds a second matching path per rule to keep in sync), and
+    a `--race-safe`/`--safe` build for this binary specifically (worth
+    doing once there's a reason to suspect a bug, not speculatively).
 - **False positives**: rules like `js-hardcoded-secret` and `sql-string-concat`
   fire on Vue prop bindings, test fixtures, and other benign matches (verified
   against `~/pr/multi-assistant`). This is what `secure verdict` is for — the

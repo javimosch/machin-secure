@@ -49,6 +49,22 @@ type VerdictRec struct {
 	ts      int
 }
 
+// a file queued for scanning, and one worker's local (never-shared) tally —
+// per machin's data-race rule, only the collector goroutine (main) may ever
+// touch the `run` global; workers accumulate into their own WorkerResult and
+// hand it over a channel once, after their job queue drains.
+type Job struct {
+	path string
+	lang string
+}
+
+type WorkerResult struct {
+	findings   []Finding
+	scanned    int
+	skipped    int
+	suppressed int
+}
+
 // global run state (structs are pass-by-value in MFL; a global avoids copying)
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
@@ -250,9 +266,13 @@ func diff_scan(target, base, rules) {
 	}
 }
 
-// ---- recursive walk ----
+// ---- recursive walk: collect jobs, then scan them in parallel ----
+// Walking (list_dir/stat) is cheap and stays single-threaded; the expensive
+// part — reading each file and running every applicable regex over every
+// line — is what gets spread across worker goroutines below.
 
-func walk(dir, rules, depth) {
+func collect_files(dir, depth) (jobs) {
+	jobs = []Job{}
 	if depth > 25 { return }
 	entries := list_dir(dir)
 	for _, name := range entries {
@@ -260,14 +280,112 @@ func walk(dir, rules, depth) {
 		k, size, _ := stat(full)
 		if k == 2 {
 			if should_skip_dir(name) { continue }
-			walk(full, rules, depth+1)
+			sub := collect_files(full, depth+1)
+			for _, j := range sub { jobs = append(jobs, j) }
 		} else if k == 1 {
 			if has_suffix(name, ".machin-secure.verdicts.json") { continue }
 			if size > 1000000 { run.skipped = run.skipped + 1 ; continue }
 			lang := lang_of(full)
 			if lang == "" { continue }
-			scan_file(full, lang, rules)
+			jobs = append(jobs, Job{path: full, lang: lang})
 		}
+	}
+}
+
+// every lang lang_of() can return; precomputing all of them once (instead of
+// lazily per-file, per the old lang_rules_cache global) means no worker ever
+// writes to a shared map — each just reads its own entry, which is race-free.
+func all_langs() (langs) {
+	langs = []string{"py", "js", "ts", "tsx", "jsx", "vue", "go", "php", "rb", "java", "sh", "yaml", "json", "env", "md", "dockerfile"}
+}
+
+func build_lang_rules_index(rules) (idx) {
+	idx = make(map[string][]Rule)
+	for _, l := range all_langs() {
+		out := []Rule{}
+		for _, rule := range rules {
+			if rule_applies(rule, l) { out = append(out, rule) }
+		}
+		idx[l] = out
+	}
+}
+
+// scan_into is scan_file's logic against a WORKER-LOCAL result instead of
+// the `run` global — safe to call from any number of goroutines at once
+// because it never touches shared mutable state (lang_rules is a read-only
+// map built before any worker starts; verdict_map/want_show_all are globals
+// populated/set before spawning and never written again during a scan).
+func scan_into(path, lang, lang_rules, wr_in) (wr) {
+	wr = wr_in
+	wr.scanned = wr.scanned + 1
+	src := read_file(path)
+	if len(src) == 0 { return }
+	if len(src) > 1000000 { wr.skipped = wr.skipped + 1 ; return }
+	applicable := lang_rules[lang]
+	if len(applicable) == 0 { return }
+	lines := split(src, "\n")
+	for i, line := range lines {
+		trimmed := trim(line)
+		if trimmed == "" { continue }
+		for _, rule := range applicable {
+			if regex_match(line, rule.pattern) {
+				id := sha256(rule.id + "|" + path + "|" + trimmed)
+				v := verdict_map[id]
+				if v == "drop" {
+					wr.suppressed = wr.suppressed + 1
+					if !want_show_all { continue }
+				}
+				snip := trimmed
+				if len(snip) > 200 { snip = substr(snip, 0, 200) + "..." }
+				f := Finding{
+					id:       id,
+					rule:     rule.id,
+					file:     path,
+					line:     i + 1,
+					severity: rule.severity,
+					cwe:      rule.cwe,
+					message:  rule.message,
+					snippet:  snip,
+					verdict:  v,
+				}
+				wr.findings = append(wr.findings, f)
+			}
+		}
+	}
+}
+
+func scan_worker(jobs, lang_rules, results) {
+	wr := WorkerResult{findings: []Finding{}}
+	for job := range jobs {
+		wr = scan_into(job.path, job.lang, lang_rules, wr)
+	}
+	results <- wr
+}
+
+func parallel_walk(target, rules, workers) {
+	jobs_list := collect_files(target, 0)
+	n := len(jobs_list)
+	if n == 0 { return }
+	if workers > n { workers = n }
+	if workers < 1 { workers = 1 }
+	lang_rules := build_lang_rules_index(rules)
+
+	jobs := make(chan Job)
+	results := make(chan WorkerResult)
+	w := 0
+	for w < workers { go scan_worker(jobs, lang_rules, results) ; w = w + 1 }
+	i := 0
+	for i < n { jobs <- jobs_list[i] ; i = i + 1 }
+	close(jobs)
+
+	got := 0
+	for got < workers {
+		wr := <-results
+		for _, f := range wr.findings { run.findings = append(run.findings, f) }
+		run.scanned = run.scanned + wr.scanned
+		run.skipped = run.skipped + wr.skipped
+		run.suppressed = run.suppressed + wr.suppressed
+		got = got + 1
 	}
 }
 
@@ -429,6 +547,7 @@ func main() {
 	store_path := ""
 	want_diff := false
 	diff_base := ""
+	workers := 8
 	help := false
 
 	i := 1
@@ -444,6 +563,7 @@ func main() {
 		if arg == "--show-all" { want_show_all = true }
 		if arg == "--diff" { want_diff = true }
 		if arg == "--diff-base" { want_diff = true ; i = i + 1 ; if i < len(a) { diff_base = a[i] } }
+		if arg == "--workers" { i = i + 1 ; if i < len(a) { workers = parse_int(a[i]) } }
 		if arg == "--help" || arg == "-h" { help = true }
 		if has_prefix(arg, "-") == false && target == "" && i > 0 { target = arg }
 		i = i + 1
@@ -468,6 +588,7 @@ func main() {
 		println("  --diff               scan only files changed in the working tree (git diff --name-only)")
 		println("  --diff-base REF      scan only files changed vs REF (git diff --name-only REF...HEAD),")
 		println("                       for CI/PR-scoped scans; implies --diff. Target must be a git repo.")
+		println("  --workers N          parallel scan workers for a full directory walk (default: 8)")
 		println("  --hart               print guidance for publishing your own HTML report to")
 		println("                       hart.intrane.fr (default instance). This tool does not")
 		println("                       author or publish the report — your own model does,")
@@ -512,7 +633,7 @@ func main() {
 		lang := lang_of(target)
 		if lang != "" { scan_file(target, lang, rules) }
 	} else {
-		walk(target, rules, 0)
+		parallel_walk(target, rules, workers)
 	}
 
 	if want_summary {
