@@ -54,6 +54,7 @@ by default (override with `--store PATH`), excluded from scanning itself.
 ```sh
 ./secure --target ./some/repo                          # JSONL findings on stdout
 ./secure --target ./some/repo --summary                 # one JSON summary object only
+./secure --target ./some/repo --sarif                   # SARIF 2.1.0 report on stdout (for GitHub Code Scanning)
 ./secure --target ./some/repo --hart                    # print a hint for the agent to write+publish its own report to hart.intrane.fr
 ./secure --target ./some/repo --show-all                # include findings already verdicted 'drop'
 ./secure verdict --target ./some/repo <id> drop --reason "..."   # persist a false-positive judgment
@@ -61,6 +62,35 @@ by default (override with `--store PATH`), excluded from scanning itself.
 ./secure --help
 ./secure verdict --help
 ```
+
+## CI / GitHub Code Scanning
+
+`--sarif` emits a SARIF 2.1.0 document (validated against
+`json.schemastore.org/sarif-2.1.0.json`) with `tool.driver.rules[]` (one per
+rule, with CWE `helpUri`, `defaultConfiguration.level`, and a GitHub
+`properties.security-severity` 0–10) and `results[]` (one per finding, with
+`ruleId`+`ruleIndex`, `level`, `message`, `locations[].physicalLocation` with
+`artifactLocation.uri` + `region.startLine` + `snippet`, and
+`partialFingerprints.primary` = the finding's stable sha256 `id`).
+
+It's built as a string with `json()` escaping each value — MFL has no `any` map
+value type, so nested heterogeneous JSON is assembled by concatenation; `json(x)`
+on each string/int yields a correctly escaped JSON token, so there's no
+hand-rolled escaping. Severity → SARIF level: critical/high → `error`,
+medium → `warning`, low → `note`. security-severity: critical 9.5, high 8.0,
+medium 5.0, low 2.0.
+
+The reusable GitHub Action (`action.yml` + `Dockerfile` + `entrypoint.sh`) is a
+Docker action: a multi-stage build pins machin to an immutable commit SHA
+(`MACHIN_REF` build arg, currently `565c25c` = v0.123.0 — the release that added
+the 3-value `stat`/`exec` multi-assign this tool uses; bump to a tag once
+v0.123.0 is released), builds `secure`, and copies the static binary + default
+`rules.json` into an alpine runtime. The entrypoint runs `secure --sarif` and
+writes the file, then exits `0` on both clean and findings (exit 2 from `secure`
+is reinterpreted as success so `upload-sarif` always runs); only exit 1 (real
+tool error) fails the step. The example workflow in
+`.github/workflows/machin-secure.yml` shows the `security-events: write`
+permission and `github/codeql-action/upload-sarif@v3` upload.
 
 Exit codes: `0` clean, `1` error (e.g. bad target/rules), `2` high/critical
 findings present. Designed to be piped: `./secure --target . | jq 'select(.severity=="critical")'`.

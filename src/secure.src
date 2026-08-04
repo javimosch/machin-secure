@@ -65,6 +65,9 @@ type WorkerResult struct {
 	suppressed int
 }
 
+// tool version — surfaced in SARIF tool.driver.version and --help
+var version = "0.1.0"
+
 // global run state (structs are pass-by-value in MFL; a global avoids copying)
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
@@ -418,6 +421,71 @@ func emit_summary() {
 	println(json(m))
 }
 
+// ---- SARIF 2.1.0 output (for GitHub Code Scanning / SARIF consumers) ----
+// Built as a string with json() escaping each value: MFL has no `any` map
+// value type, so nested heterogeneous JSON is assembled by concatenation;
+// json(x) on each string/int yields a correctly escaped JSON token, so no
+// hand-rolled escaping. This is the bridge to CI: GitHub's Security tab,
+// VS Code SARIF viewer, and any SARIF-consuming tool read this directly.
+
+func sarif_level(sev) (lvl) {
+	lvl = "note"
+	if sev == "critical" { lvl = "error" }
+	if sev == "high" { lvl = "error" }
+	if sev == "medium" { lvl = "warning" }
+	if sev == "low" { lvl = "note" }
+}
+
+// GitHub security-severity (0.0-10.0) drives prioritization in the Security tab
+func sarif_sec_severity(sev) (s) {
+	s = "2.0"
+	if sev == "critical" { s = "9.5" }
+	if sev == "high" { s = "8.0" }
+	if sev == "medium" { s = "5.0" }
+}
+
+func cwe_url(cwe) (url) {
+	url = ""
+	if has_prefix(cwe, "CWE-") {
+		num := substr(cwe, 4, len(cwe))
+		url = "https://cwe.mitre.org/data/definitions/" + num + ".html"
+	}
+}
+
+func emit_sarif(rules) {
+	rule_idx := make(map[string]int)
+	rules_arr := ""
+	for i, rule := range rules {
+		rule_idx[rule.id] = i
+		if i > 0 { rules_arr = rules_arr + "," }
+		tags := "[\"security\""
+		if rule.cwe != "" { tags = tags + "," + json(to_lower(rule.cwe)) }
+		tags = tags + "]"
+		rules_arr = rules_arr + "{\"id\":" + json(rule.id)
+		rules_arr = rules_arr + ",\"name\":" + json(rule.id)
+		rules_arr = rules_arr + ",\"shortDescription\":{\"text\":" + json(rule.message) + "}"
+		cu := cwe_url(rule.cwe)
+		if cu != "" { rules_arr = rules_arr + ",\"helpUri\":" + json(cu) }
+		rules_arr = rules_arr + ",\"defaultConfiguration\":{\"level\":" + json(sarif_level(rule.severity)) + "}"
+		rules_arr = rules_arr + ",\"properties\":{\"tags\":" + tags
+		rules_arr = rules_arr + ",\"security-severity\":" + json(sarif_sec_severity(rule.severity)) + "}}"
+	}
+	results_arr := ""
+	for j, f := range run.findings {
+		if j > 0 { results_arr = results_arr + "," }
+		idx := rule_idx[f.rule]
+		results_arr = results_arr + "{\"ruleId\":" + json(f.rule)
+		results_arr = results_arr + ",\"ruleIndex\":" + str(idx)
+		results_arr = results_arr + ",\"level\":" + json(sarif_level(f.severity))
+		results_arr = results_arr + ",\"message\":{\"text\":" + json(f.message) + "}"
+		results_arr = results_arr + ",\"locations\":[{\"physicalLocation\":{\"artifactLocation\":{\"uri\":" + json(f.file)
+		results_arr = results_arr + "},\"region\":{\"startLine\":" + str(f.line) + ",\"snippet\":{\"text\":" + json(f.snippet) + "}}}}]"
+		results_arr = results_arr + ",\"partialFingerprints\":{\"primary\":" + json(f.id) + "}}"
+	}
+	out := "{\"$schema\":\"https://json.schemastore.org/sarif-2.1.0.json\",\"version\":\"2.1.0\",\"runs\":[{\"tool\":{\"driver\":{\"name\":\"machin-secure\",\"version\":\"" + version + "\",\"informationUri\":\"https://github.com/javimosch/machin-secure\",\"rules\":[" + rules_arr + "]}},\"results\":[" + results_arr + "]}]}"
+	println(out)
+}
+
 // ---- hart reporting (opt-in) ----
 // This tool deliberately does NOT author the report itself — that would bake
 // another piece of "LLM-flavored" judgment (what to highlight, how to phrase
@@ -542,6 +610,7 @@ func main() {
 	rules_path := "rules.json"
 	want_hart := false
 	want_summary := false
+	want_sarif := false
 	hart_owner := "machin-secure"
 	hart_artifact := "audit"
 	store_path := ""
@@ -557,6 +626,7 @@ func main() {
 		if arg == "--rules" { i = i + 1 ; if i < len(a) { rules_path = a[i] } }
 		if arg == "--hart" { want_hart = true }
 		if arg == "--summary" { want_summary = true }
+		if arg == "--sarif" { want_sarif = true }
 		if arg == "--hart-owner" { i = i + 1 ; if i < len(a) { hart_owner = a[i] } }
 		if arg == "--hart-artifact" { i = i + 1 ; if i < len(a) { hart_artifact = a[i] } }
 		if arg == "--store" { i = i + 1 ; if i < len(a) { store_path = a[i] } }
@@ -583,6 +653,8 @@ func main() {
 		println("  --target PATH        directory or file to scan (default: current dir)")
 		println("  --rules PATH         rules.json (default: ./rules.json)")
 		println("  --summary            print only a summary JSON object, no per-finding lines")
+		println("  --sarif              emit a SARIF 2.1.0 report on stdout (for GitHub Code Scanning)")
+		println("                       — pipe to a file and upload with github/codeql-action/upload-sarif")
 		println("  --show-all           include findings the agent already marked 'drop'")
 		println("  --store PATH         verdict store (default: <target-dir>/.machin-secure.verdicts.json)")
 		println("  --diff               scan only files changed in the working tree (git diff --name-only)")
@@ -636,7 +708,9 @@ func main() {
 		parallel_walk(target, rules, workers)
 	}
 
-	if want_summary {
+	if want_sarif {
+		emit_sarif(rules)
+	} else if want_summary {
 		emit_summary()
 	} else {
 		emit_jsonl()

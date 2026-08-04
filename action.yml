@@ -1,0 +1,26 @@
+name: 'machin-secure'
+author: 'javimosch'
+description: 'KISS agent-first security auditor — runs machin-secure and produces a SARIF 2.1.0 report for GitHub Code Scanning'
+branding:
+  icon: 'shield'
+  color: 'gray-dark'
+inputs:
+  target:
+    description: 'Directory or file to scan (relative to the repo root)'
+    required: false
+    default: '.'
+  rules:
+    description: 'Path to rules.json (defaults to the bundled rule pack)'
+    required: false
+    default: '/usr/local/share/machin-secure/rules.json'
+  output:
+    description: 'Path to write the SARIF file (relative to the repo root)'
+    required: false
+    default: 'machin-secure.sarif'
+outputs:
+  sarif:
+    description: 'Path to the generated SARIF file'
+    value: ${{ inputs.output }}
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

@@ -1,0 +1,30 @@
+# Example workflow: run machin-secure on every push/PR and surface findings in
+# the GitHub Security tab via SARIF. Copy this into your own repo's
+# .github/workflows/ and point `uses:` at a released tag of machin-secure.
+name: machin-secure
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF to code scanning
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run machin-secure
+        uses: javimosch/machin-secure@v1
+        with:
+          target: '.'
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: machin-secure.sarif
+          category: machin-secure

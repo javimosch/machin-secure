@@ -6,6 +6,7 @@ secure.mfl
 *.html
 .machin-secure.verdicts.json
 test/fixtures/.machin-secure.verdicts.json
+machin-secure.sarif
 
 # os
 .DS_Store

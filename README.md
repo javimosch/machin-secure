@@ -56,6 +56,47 @@ none of the infrastructure, cost, or attack surface.
 Exit codes: `0` clean · `1` error · `2` high/critical findings present.
 Pipeable: `./secure --target . | jq 'select(.severity=="critical")'`.
 
+## CI / GitHub Code Scanning
+
+`--sarif` emits a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+report (validated against the official schema) that GitHub's Security tab, VS
+Code's SARIF viewer, and any SARIF consumer read directly. Each rule carries a
+CWE `helpUri`, a `level` (`error`/`warning`/`note`), and a GitHub
+`security-severity` (0–10) so findings land in the right priority bucket:
+
+```sh
+./secure --target . --sarif > machin-secure.sarif
+```
+
+There's a reusable GitHub Action (this repo's `action.yml` + `Dockerfile`) that
+builds the binary in a pinned multi-stage image and writes the SARIF file. Drop
+this into `.github/workflows/machin-secure.yml` in any repo:
+
+```yaml
+name: machin-secure
+on: [push, pull_request]
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: javimosch/machin-secure@v1
+        with:
+          target: '.'
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: machin-secure.sarif
+          category: machin-secure
+```
+
+The action exits `0` whether or not findings exist (so the SARIF upload always
+runs); severity gating is left to GitHub code-scanning settings. Inputs:
+`target` (default `.`), `rules` (default: the bundled rule pack),
+`output` (default `machin-secure.sarif`).
+
 ## The verdict loop (instead of an LLM filter)
 
 Every finding carries a stable `id` (`sha256(rule|file|line)`). Rather than
