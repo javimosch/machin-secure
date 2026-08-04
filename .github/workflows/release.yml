@@ -114,6 +114,7 @@ jobs:
           # `uses: ...@vN` can fetch machin-secure-linux-amd64.tar.gz by URL.
           if gh release view "$MAJOR" >/dev/null 2>&1; then
             gh release upload "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt --clobber
+            gh release edit "$MAJOR" --title "${MAJOR} (moving — latest ${TAG})"
           else
             gh release create "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt \
               --generate-notes --title "${MAJOR} (moving — latest ${TAG})"
