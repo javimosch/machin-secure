@@ -10226,7 +10226,7 @@
     ]
   },
   {
-    "id": "crypto-rsa-small-key",
+    "id": "crypto-rsa-below-2048",
     "pattern": "RSA.*512|RSA.*768|RSA.*1024|rsa.*512|rsa.*768|rsa.*1024",
     "severity": "medium",
     "cwe": "CWE-326",
