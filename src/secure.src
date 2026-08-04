@@ -16,6 +16,7 @@ type Rule struct {
 	cwe      string
 	message  string
 	langs    []string
+	literals []string
 }
 
 type Finding struct {
@@ -197,6 +198,117 @@ func load_rules(path) (rules) {
 	s := read_file(path)
 	if len(s) == 0 { return }
 	rules = parse(s, []Rule{})
+	// Pre-compute required literal substrings for each rule's pattern. The
+	// scan loop uses them as a cheap `contains` pre-filter before the expensive
+	// regex_match call — machin's regex_match recompiles the pattern on every
+	// call (no compiled-regex cache), so skipping regex calls on large files
+	// is a big win. For patterns with top-level alternation (A|B|C), we
+	// extract a literal from EACH alternative and only run the regex if the
+	// line contains at least one. Rules where no literal can be extracted
+	// (char-class prefixes, empty alternatives) get an empty list and always
+	// run the regex — safe, just unoptimized.
+	for i := range rules {
+		rules[i].literals = extract_literals(rules[i].pattern)
+	}
+}
+
+// extract_literals returns a list of literal substrings for pre-filtering.
+// For a pattern without top-level `|`, returns a single-element list (or
+// empty if no literal can be extracted). For `A|B|C`, it extracts a literal
+// from EACH alternative — but ONLY if every alternative yields a literal.
+// If any alternative has no extractable literal (e.g. starts with `(` or a
+// char class, or its literal run is <3 chars), the line could match via that
+// alternative without containing any of the other literals, so we return an
+// empty list and don't pre-filter (safe — the regex always runs).
+func extract_literals(pat) (lits) {
+	lits = []string{}
+	alts := split_top_level_alt(pat)
+	all_have := true
+	for _, alt := range alts {
+		l := extract_literal_one(alt)
+		if l == "" {
+			all_have = false
+		} else {
+			lits = append(lits, l)
+		}
+	}
+	if !all_have { lits = []string{} }
+}
+
+// split_top_level_alt splits a POSIX ERE pattern by top-level `|` (not inside
+// [...] or (...)), returning each alternative as a substring.
+func split_top_level_alt(pat) (alts) {
+	alts = []string{}
+	depth := 0
+	start := 0
+	i := 0
+	n := len(pat)
+	for i < n {
+		c := substr(pat, i, i+1)
+		if c == "\\" { i = i + 2 ; continue }
+		if c == "[" {
+			i = i + 1
+			if i < n && substr(pat, i, i+1) == "^" { i = i + 1 }
+			if i < n && substr(pat, i, i+1) == "]" { i = i + 1 }
+			while i < n && substr(pat, i, i+1) != "]" { i = i + 1 }
+			if i < n { i = i + 1 }
+			continue
+		}
+		if c == "(" { depth = depth + 1 }
+		if c == ")" { depth = depth - 1 }
+		if c == "|" && depth == 0 {
+			alts = append(alts, substr(pat, start, i))
+			start = i + 1
+		}
+		i = i + 1
+	}
+	alts = append(alts, substr(pat, start, n))
+}
+
+// extract_literal_one pulls a leading literal substring (≥3 chars) from a
+// single ERE alternative (no top-level `|`). Conservative: only chars we're
+// certain are required are collected; `*`/`?` drops the optional preceding
+// char and stops.
+func extract_literal_one(pat) (lit) {
+	lit = ""
+	i := 0
+	n := len(pat)
+	if i < n && substr(pat, i, i+1) == "^" { i = i + 1 }
+	// skip leading zero-width assertions and whitespace quantifiers
+	while i < n {
+		if substr(pat, i, i+1) == "\\" && i+1 < n {
+			nx := substr(pat, i+1, i+2)
+			if nx == "b" || nx == "B" { i = i + 2 ; continue }
+			if nx == "s" || nx == "S" || nx == "t" {
+				i = i + 2
+				if i < n && (substr(pat, i, i+1) == "*" || substr(pat, i, i+1) == "+") { i = i + 1 }
+				continue
+			}
+		}
+		break
+	}
+	out := ""
+	while i < n {
+		c := substr(pat, i, i+1)
+		if c == "\\" {
+			if i+1 < n {
+				nx := substr(pat, i+1, i+2)
+				if nx == "b" || nx == "B" || nx == "d" || nx == "D" || nx == "s" || nx == "S" || nx == "w" || nx == "W" || nx == "n" || nx == "r" || nx == "t" { break }
+				out = out + nx
+				i = i + 2
+				continue
+			}
+			break
+		}
+		if c == "*" || c == "?" {
+			if len(out) > 0 { out = substr(out, 0, len(out)-1) }
+			break
+		}
+		if c == "+" || c == "{" || c == "[" || c == "(" || c == ")" || c == "|" || c == "." || c == "$" || c == "]" || c == "}" { break }
+		out = out + c
+		i = i + 1
+	}
+	if len(out) >= 3 { lit = out }
 }
 
 // ---- rule applies to lang? ----
@@ -235,6 +347,13 @@ func scan_file(path, lang, rules) {
 		trimmed := trim(line)
 		if trimmed == "" { continue }
 		for _, rule := range applicable {
+			if len(rule.literals) > 0 {
+				hit := false
+				for _, lit := range rule.literals {
+					if contains(line, lit) { hit = true ; break }
+				}
+				if !hit { continue }
+			}
 			if regex_match(line, rule.pattern) {
 				id := sha256(rule.id + "|" + path + "|" + trimmed)
 				v := verdict_map[id]
@@ -352,6 +471,13 @@ func scan_into(path, lang, lang_rules, wr_in) (wr) {
 		trimmed := trim(line)
 		if trimmed == "" { continue }
 		for _, rule := range applicable {
+			if len(rule.literals) > 0 {
+				hit := false
+				for _, lit := range rule.literals {
+					if contains(line, lit) { hit = true ; break }
+				}
+				if !hit { continue }
+			}
 			if regex_match(line, rule.pattern) {
 				id := sha256(rule.id + "|" + path + "|" + trimmed)
 				v := verdict_map[id]

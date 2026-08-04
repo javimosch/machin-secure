@@ -165,11 +165,23 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
     file's pre-existing findings are reported too, not just the new lines.
     Intentional for a KISS tool — hunk-level scoping would need diff parsing
     and doesn't change the complexity story enough to be worth it yet.
-  - Not done, and not obviously worth it next: per-rule literal-substring
-    pre-filtering before invoking `regex_match` (would cut regex calls
-    further but adds a second matching path per rule to keep in sync), and
-    a `--race-safe`/`--safe` build for this binary specifically (worth
-    doing once there's a reason to suspect a bug, not speculatively).
+  - **Per-rule literal pre-filter** (v2.1.0): machin's `regex_match`
+    recompiles the pattern on every call (no compiled-regex cache in the
+    C runtime), so 1000 rules × 12k lines = 12M regex compilations on a
+    large file. `load_rules` now pre-extracts a required literal substring
+    from each rule's pattern (`extract_literals`), and the scan loops do a
+    cheap `contains(line, lit)` before the expensive `regex_match`. For
+    patterns with top-level alternation (`A|B|C`), a literal is extracted
+    from EACH alternative — but only if every alternative yields one (if any
+    alternative has no extractable literal, the line could match via it
+    without containing any other literal, so we skip the pre-filter for that
+    rule entirely — safe, just unoptimized). Verified byte-identical findings
+    (1861 on fixtures, 435 on rules.json) before and after. Measured 5.8x
+    speedup on rules.json (39s → 6.8s) and 1.3x on typical small code files.
+    The full-repo self-scan went from hanging (CI timeout/Killed) to 12s.
+  - Not done, and not obviously worth it next: a `--race-safe`/`--safe` build
+    for this binary specifically (worth doing once there's a reason to suspect
+    a bug, not speculatively).
 - **False positives**: rules like `js-hardcoded-secret` and `sql-string-concat`
   fire on Vue prop bindings, test fixtures, and other benign matches (verified
   against `~/pr/multi-assistant`). This is what `secure verdict` is for — the

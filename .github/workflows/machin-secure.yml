@@ -24,9 +24,8 @@ jobs:
         uses: javimosch/machin-secure@v2
         with:
           # Scan only files changed since the previous commit — the documented
-          # CI pattern (see AGENTS.md "Scope"). A full walk would also scan
-          # rules.json (a 290 KB / 12k-line data file) and the checked-in
-          # binary, which is slow and pointless for a self-audit.
+          # CI pattern (see AGENTS.md "Scope"). Fast, and scans the actual
+          # change rather than the whole repo every push.
           target: '.'
           args: '--diff-base HEAD~1'
 
