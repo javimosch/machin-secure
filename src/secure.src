@@ -65,21 +65,6 @@ func last_index(s, sub) (n) {
 	}
 }
 
-func strip_quotes(s) (out) {
-	out = s
-	if len(out) >= 2 && substr(out, 0, 1) == "\"" && substr(out, len(out)-1, len(out)) == "\"" {
-		out = substr(out, 1, len(out)-1)
-	}
-}
-
-func html_escape(s) (out) {
-	out = s
-	out = replace(out, "&", "&amp;")
-	out = replace(out, "<", "&lt;")
-	out = replace(out, ">", "&gt;")
-	out = replace(out, "\"", "&quot;")
-}
-
 // ---- lang detection by extension ----
 
 func lang_of(path) (lang) {
@@ -278,10 +263,17 @@ func emit_summary() {
 	println(json(m))
 }
 
-// ---- hart report (opt-in) ----
+// ---- hart reporting (opt-in) ----
+// This tool deliberately does NOT author the report itself — that would bake
+// another piece of "LLM-flavored" judgment (what to highlight, how to phrase
+// it) into a binary that otherwise owns none. Same rule as the verdict store:
+// the calling agent already has a model; authoring prose/HTML is its job.
+// --hart only prints a hint pointing the agent at the default hart instance
+// and the exact publish contract, so it can write and publish its own report.
 
-func hart_report(owner, artifact) (url) {
-	url = ""
+func print_hart_hint(owner, artifact) {
+	hart_url := env("HART_URL")
+	if hart_url == "" { hart_url = "https://hart.intrane.fr" }
 	crit := 0 ; high := 0 ; med := 0 ; low := 0
 	for _, f := range run.findings {
 		if f.severity == "critical" { crit = crit + 1 }
@@ -289,66 +281,17 @@ func hart_report(owner, artifact) (url) {
 		if f.severity == "medium" { med = med + 1 }
 		if f.severity == "low" { low = low + 1 }
 	}
-	total := crit + high + med + low
-	h := "<!doctype html><html><head><meta charset=utf-8>"
-	h = h + "<meta name=title content=\"machin-secure report\">"
-	h = h + "<meta name=description content=\"Security audit findings for " + run.target + " — " + str(total) + " findings\">"
-	h = h + "<title>machin-secure — " + run.target + "</title>"
-	h = h + "<style>"
-	h = h + "body{font:14px/1.5 ui-monospace,Consolas,monospace;background:#0a0a0a;color:#d4d4d4;margin:0;padding:24px}"
-	h = h + "h1{font-size:18px;border-bottom:1px solid #333;padding-bottom:8px}"
-	h = h + ".meta{color:#888;font-size:12px;margin-bottom:16px}"
-	h = h + ".sev{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:bold;margin-right:6px}"
-	h = h + ".critical{background:#7f1d1d;color:#fecaca}.high{background:#78350f;color:#fed7aa}"
-	h = h + ".medium{background:#365314;color:#d9f99d}.low{background:#1e3a8a;color:#bfdbfe}"
-	h = h + "table{width:100%;border-collapse:collapse}"
-	h = h + "th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;vertical-align:top}"
-	h = h + "th{color:#888;font-size:11px;text-transform:uppercase}"
-	h = h + "td.loc{color:#888;white-space:nowrap}"
-	h = h + "td.snip{color:#aaa;max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
-	h = h + ".summary{margin:16px 0;padding:12px;background:#111;border:1px solid #222;border-radius:4px}"
-	h = h + ".summary span{margin-right:16px}"
-	h = h + "</style></head><body>"
-	h = h + "<h1>machin-secure audit</h1>"
-	h = h + "<div class=meta>target: <b>" + run.target + "</b> &middot; " + str(run.scanned) + " files scanned &middot; " + str(run.rules_n) + " rules</div>"
-	h = h + "<div class=summary><span class=sev critical>critical " + str(crit) + "</span>"
-	h = h + "<span class=sev high>high " + str(high) + "</span>"
-	h = h + "<span class=sev medium>medium " + str(med) + "</span>"
-	h = h + "<span class=sev low>low " + str(low) + "</span></div>"
-	if total == 0 {
-		h = h + "<p>No findings.</p>"
-	} else {
-		h = h + "<table><thead><tr><th>sev</th><th>rule</th><th>file:line</th><th>message</th><th>snippet</th></tr></thead><tbody>"
-		for _, f := range run.findings {
-			h = h + "<tr><td><span class=sev " + f.severity + ">" + f.severity + "</span></td>"
-			h = h + "<td>" + f.rule + "</td>"
-			h = h + "<td class=loc>" + f.file + ":" + str(f.line) + "</td>"
-			h = h + "<td>" + f.message + "</td>"
-			h = h + "<td class=snip>" + html_escape(f.snippet) + "</td></tr>"
-		}
-		h = h + "</tbody></table>"
-	}
-	h = h + "</body></html>"
-
-	tmp := "/tmp/machin-secure-" + str(now_ms()) + ".html"
-	write_file(tmp, h)
-	// publish via hart binary; fall back to curl. Export HART_URL explicitly since
-	// the spawned shell may not source the user's env/config the same way an
-	// interactive shell does.
-	hart_url := env("HART_URL")
-	if hart_url == "" { hart_url = "https://hart.intrane.fr" }
-	cmd := "HART_URL=" + hart_url + " hart publish " + tmp + " --owner " + owner + " --artifact " + artifact + " --visibility unlisted"
-	code, out, _ := exec(cmd)
-	if code == 0 {
-		u, e := json_get(out, ".url")
-		if e == "" { url = strip_quotes(u) }
-	} else {
-		c2, o2, _ := exec("curl -s -X POST '" + hart_url + "/v1/publish?owner=" + owner + "&artifact=" + artifact + "&visibility=unlisted' -H 'content-type: text/html' --data-binary @" + tmp)
-		if c2 == 0 {
-			u, e := json_get(o2, ".url")
-			if e == "" { url = strip_quotes(u) }
-		}
-	}
+	hint := "Write a self-contained HTML report of these findings (target="
+	hint = hint + run.target + ", " + str(crit) + " critical, " + str(high) + " high, "
+	hint = hint + str(med) + " medium, " + str(low) + " low) and publish it yourself: "
+	hint = hint + "HART_URL=" + hart_url + " hart publish <file.html> --owner " + owner
+	hint = hint + " --artifact " + artifact + " --visibility unlisted"
+	m := make(map[string]string)
+	m["hart_hint"] = hint
+	m["hart_url"] = hart_url
+	m["hart_guide"] = hart_url + "/llms.txt"
+	m["note"] = "machin-secure does not generate or publish reports itself; this is guidance for the calling agent's own model"
+	println(json(m))
 }
 
 // ---- verdict subcommand ----
@@ -481,9 +424,12 @@ func main() {
 		println("  --summary            print only a summary JSON object, no per-finding lines")
 		println("  --show-all           include findings the agent already marked 'drop'")
 		println("  --store PATH         verdict store (default: <target-dir>/.machin-secure.verdicts.json)")
-		println("  --hart               publish an HTML report to https://hart.intrane.fr")
-		println("  --hart-owner NAME    hart owner namespace (default: machin-secure)")
-		println("  --hart-artifact NAME hart artifact slug (default: audit)")
+		println("  --hart               print guidance for publishing your own HTML report to")
+		println("                       hart.intrane.fr (default instance). This tool does not")
+		println("                       author or publish the report — your own model does,")
+		println("                       using `hart publish`. See https://hart.intrane.fr/llms.txt")
+		println("  --hart-owner NAME    suggested hart owner namespace (default: machin-secure)")
+		println("  --hart-artifact NAME suggested hart artifact slug (default: audit)")
 		println("  --help, -h           this help")
 		println("")
 		println("output: one JSON finding per line on stdout (JSONL). Each finding has a")
@@ -526,10 +472,7 @@ func main() {
 
 	if want_hart {
 		art := hart_artifact + "-" + str(now_ms())
-		url := hart_report(hart_owner, art)
-		if url != "" {
-			println("{\"hart_url\":\"" + url + "\"}")
-		}
+		print_hart_hint(hart_owner, art)
 	}
 
 	has_high := false
