@@ -2,9 +2,13 @@
 
 A KISS, **agent-first** security auditor. Not built for humans reading a
 dashboard — built for an LLM agent (Devin, Claude Code, any coding agent) to
-run in a loop, pipe, and act on. One ~50 KB static binary compiled from
+run in a loop, pipe, and act on. One ~88 KB static binary compiled from
 [machin](https://github.com/javimosch/machin)/MFL. No Docker, no browser
 automation, no LLM API client inside the tool itself.
+
+**Docs site:** https://javimosch.github.io/machin-secure/ ·
+**Vision & north star:** [`docs/VISION.md`](docs/VISION.md) ·
+**Changelog:** [`docs/changelog.html`](docs/changelog.html)
 
 ```
 rules.json (the moat) --> secure binary (the engine) --> JSONL findings on stdout
