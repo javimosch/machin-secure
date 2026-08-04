@@ -1,0 +1,13 @@
+import java.io.*;
+import javax.xml.bind.*;
+import javax.xml.stream.*;
+ObjectInputStream ois = new ObjectInputStream();
+ois.readObject();
+XMLDecoder decoder = new XMLDecoder();
+XStream xstream = new XStream();
+xstream.fromXML(data);
+DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+SAXParserFactory spf = SAXParserFactory.newInstance();
+XMLReader reader = XMLReaderFactory.createXMLReader();
+JAXBContext jaxb = JAXBContext.newInstance();
+XMLInputFactory xif = XMLInputFactory.newInstance();

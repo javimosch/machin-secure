@@ -1,0 +1,25 @@
+apiVersion: networking.istio.io/v1
+kind: PeerAuthentication
+spec:
+  mtls:
+    mode: PERMISSIVE
+AuthorizationPolicy: {}
+eureka:
+  client:
+    serviceUrl: http://public-eureka:8761
+spring:
+  cloud:
+    config:
+      server:
+        port: 8888
+rabbitmq:
+  url: amqp://guest:guest@localhost
+kafka:
+  security: plaintext
+deadLetter: {}
+saga:
+  compensation: false
+sampler:
+  rate: 0
+tls mode: SIMPLE
+eureka public: true

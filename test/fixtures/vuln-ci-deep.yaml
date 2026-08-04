@@ -1,0 +1,19 @@
+on:
+  push:
+    branches: [main]
+uses: actions/checkout@v4
+pull_request_target:
+permissions: write-all
+secrets: ${{ secrets.API_KEY }}
+sudo: true
+curl https://example.com | bash
+ACTIONS_STEP_DEBUG: true
+StrictHostKeyChecking no
+environment: production
+permissions: {}
+retention-days: 7
+sudo apt-get update
+rollback: true
+canary: true
+on: push: branches: [main]
+renovate: true

@@ -1,0 +1,12 @@
+Environment:
+  Variables:
+    PASSWORD: secret
+    SECRET: key
+DeadLetterConfig: {}
+VpcConfig: {}
+Principal: "*"
+ReservedConcurrentExecutions: 0
+assignPublicIp: "ENABLED"
+LogRetentionInDays: 7
+Timeout: 300
+encryptAtRest: true

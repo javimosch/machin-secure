@@ -130,6 +130,10 @@ func lang_of(path) (lang) {
 	if ext == "ini" || ext == "cfg" || ext == "conf" { lang = "ini" ; return }
 	if ext == "json" { lang = "json" ; return }
 	if ext == "md" { lang = "md" ; return }
+	if ext == "sql" { lang = "sql" ; return }
+	if ext == "env" { lang = "env" ; return }
+	if ext == "html" || ext == "htm" { lang = "html" ; return }
+	if ext == "css" { lang = "css" ; return }
 }
 
 // ---- dir skip list ----
@@ -316,7 +320,7 @@ func collect_files(dir, depth) (jobs) {
 // lazily per-file, per the old lang_rules_cache global) means no worker ever
 // writes to a shared map — each just reads its own entry, which is race-free.
 func all_langs() (langs) {
-	langs = []string{"py", "js", "ts", "tsx", "jsx", "vue", "go", "rust", "c", "cpp", "cs", "kotlin", "swift", "php", "rb", "java", "sh", "yaml", "terraform", "xml", "toml", "properties", "plist", "ini", "requirements", "gomod", "gemfile", "pipfile", "json", "env", "md", "dockerfile"}
+	langs = []string{"py", "js", "ts", "tsx", "jsx", "vue", "go", "rust", "c", "cpp", "cs", "kotlin", "swift", "php", "rb", "java", "sh", "yaml", "terraform", "xml", "toml", "properties", "plist", "ini", "requirements", "gomod", "gemfile", "pipfile", "json", "env", "md", "dockerfile", "sql", "html", "css"}
 }
 
 func build_lang_rules_index(rules) (idx) {

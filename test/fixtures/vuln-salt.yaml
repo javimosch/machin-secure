@@ -1,0 +1,7 @@
+install:
+  file.managed:
+    - name: /tmp/x
+    - mode: 0777
+    - source: http://example.com/file
+  cmd.run: "echo {{ user_input | quote }}"
+  password: "hardcoded123"

@@ -1,0 +1,8 @@
+privileged: true
+runAsUser: 0
+runAsNonRoot: false
+image: nginx:latest
+resources: {}
+livenessProbe: {}
+NetworkPolicy: {}
+securityContext: {}

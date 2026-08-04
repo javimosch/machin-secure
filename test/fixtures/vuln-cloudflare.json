@@ -1,0 +1,6 @@
+{
+  "min_tls_version": "1.0",
+  "ssl_mode": "flexible",
+  "waf": { "disabled": true },
+  "cache_level": "cache_everything"
+}

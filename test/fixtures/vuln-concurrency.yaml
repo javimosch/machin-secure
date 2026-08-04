@@ -1,0 +1,7 @@
+pool:
+  size: 500
+  timeout: 0
+cache:
+  size: 0
+queue:
+  maxSize: 0

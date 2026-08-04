@@ -119,19 +119,36 @@ the tool returns structured data, the operator's own LLM does the reasoning.
 
 ## Rules
 
-`rules.json` — 235 CWE-tagged detections (secrets, command injection,
-deserialization, XSS, weak crypto, TLS bypass, SQL injection, path traversal,
-hardcoded credentials, SSRF, XXE, CORS, open redirect, buffer overflow, CSRF,
-mass assignment, ReDoS, log injection, IaC misconfigurations, CI/CD pipeline
-security, dependency/config hardening, auth/session security, GraphQL,
-prototype pollution, NoSQL/LDAP/template injection, crypto misuse, PHP
-injection patterns, info disclosure, language deep dives (C/C++ format strings,
-Rust unsafe, Go unsafe/cgo, Java JNDI/SpEL/XPath), mobile security (Android/iOS),
-framework rules (Rails/Laravel), cloud (AWS), database injection (Redis/ES),
-cleartext protocols, supply chain) across Python, JS/TS/Vue, Go, Rust, C/C++,
-C#, Java/Kotlin, Ruby, Shell, Swift, PHP, YAML, Terraform, Dockerfiles, XML,
-TOML, .properties, plist, INI, requirements.txt, Gemfile. It's plain data, read
-fresh from disk every run — extend it without recompiling.
+`rules.json` — **1,000 CWE-tagged detections** covering secrets (AWS, GCP, Azure,
+Stripe, Twilio, Slack, GitHub, GitLab, npm, PyPI, SendGrid, Mailgun, Discord,
+private keys, connection strings), command injection (eval, exec, subprocess,
+Runtime.exec), deserialization (pickle, marshal, PHP unserialize, Java
+ObjectInputStream, XStream, BinaryFormatter, node-serialize), SSTI (Jinja, Mako,
+Twig, Smarty, EJS, Pug, Handlebars, FreeMarker, Velocity, Thymeleaf), XSS
+(dangerouslySetInnerHTML, v-html, @html, mark_safe, |raw, innerHTML), SQL
+injection (raw queries, ORM injection, LIKE/ORDER BY/LIMIT/OFFSET injection),
+NoSQL injection ($where, $ne, $regex, $in), LDAP injection, template injection,
+XXE (all major XML parsers), weak crypto (MD2/MD4/MD5/SHA-0/SHA-1, 3DES, RC2/RC4,
+Blowfish, ECB mode, small RSA/DH keys, PKCS1 v1.5), TLS misconfig (SSLv2/v3,
+TLSv1.0/1.1, NULL ciphers, export ciphers), SSRF, open redirect, path traversal,
+CSRF, CORS, mass assignment, ReDoS, log injection, IaC misconfigurations
+(Terraform, CloudFormation, Ansible, Puppet, Chef, SaltStack, Pulumi, Helm),
+container/K8s security (Dockerfile, pod securityContext, privileged pods,
+hostPath, service mesh mTLS), serverless (Lambda, Fargate), CI/CD pipeline
+security (GitHub Actions, dependency management, SBOM, SAST, secret scanning),
+microservices/API gateway (gRPC, GraphQL, REST, Istio, circuit breakers, sagas),
+auth/session security (OAuth, SAML, OIDC, JWT, MFA, session management,
+password hashing), database deep dives (MongoDB, PostgreSQL, MySQL, Cassandra,
+Neo4j, Couchbase, SQLite), logging/monitoring/error handling, concurrency/race
+conditions/DoS, input validation/output encoding, info disclosure, framework
+rules (Express, Next.js, Nuxt, Angular, Vue, Svelte, Rails, Laravel, Django,
+Spring Boot, Flask), cloud (AWS, GCP, Azure, Alibaba, Cloudflare), mobile
+security (Android/iOS), language deep dives (C/C++ format strings, Rust unsafe,
+Go unsafe/cgo, Java JNDI/SpEL/XPath, C# Roslyn, Kotlin coroutines, Swift
+keychain), and supply chain) across Python, JS/TS/Vue, Go, Rust, C/C++, C#,
+Java/Kotlin, Ruby, Shell, Swift, PHP, YAML, Terraform, Dockerfiles, XML, TOML,
+.properties, plist, INI, requirements.txt, Gemfile, SQL, HTML, CSS. It's plain
+data, read fresh from disk every run — extend it without recompiling.
 
 ## Verified against
 

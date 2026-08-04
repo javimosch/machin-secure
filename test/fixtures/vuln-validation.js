@@ -1,0 +1,41 @@
+parseInt(req.body.x);
+req.body["key"];
+test(req.body.x);
+email = req.body.email;
+phone = req.body.phone;
+url = req.body.url;
+date = req.body.date;
+el.innerHTML = req.body.html;
+el.setAttribute("data", req.query.x);
+res.write("<div>" + req.body.name + "</div>");
+res.write("<script>" + req.body.code + "</script>");
+encodeURIComponent(req.query.x);
+el.style = req.body.css;
+JSON.stringify(req.body);
+el.innerHTML = "<b>";
+$(".html")();
+markdown.render(req.body.md);
+document.write(req.body.x);
+href = "javascript:alert(1)";
+src = "data:text/html,<script>";
+href = "vbscript:msgbox(1)";
+onclick = "alert(" + x + ")";
+<embed src="flash.swf">
+<svg onload="alert(1)">
+<style>expression(alert(1))</style>
+response.write("<xml>" + req.body.x + "</xml>");
+csv.write(req.body.data);
+pdf.create(req.body.html);
+mail("to@example.com", req.body.subject);
+log(req.body);
+setHeader("X-Custom", req.query.x);
+multer({ dest: "uploads/" });
+upload.allow = ".php";
+upload.path = req.query.dir;
+maxFileSize = 0;
+Content-Type = req.headers["content-type"];
+Origin = req.headers["origin"];
+Referer = req.headers["referer"];
+validate(req.body);
+$(el).html(req.body.x);
+bbcode.parse(req.body.text);

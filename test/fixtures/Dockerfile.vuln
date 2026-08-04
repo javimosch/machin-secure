@@ -1,5 +1,10 @@
-FROM node:latest
-ADD https://example.com/script.sh /tmp/
-RUN apt-get update && apt-get upgrade -y
-COPY . .
-CMD ["node", "app.js"]
+FROM ubuntu:latest
+USER root
+RUN apt-get install -y curl
+RUN apk add curl
+COPY . /app
+ADD https://example.com/file.tar.gz /tmp
+ENV PASSWORD=secret123
+HEALTHCHECK NONE
+read-only
+RUN apt-get install -y openssh-server

@@ -1,0 +1,21 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+introspection: true
+webpack-dev-server: true
+log:
+  level: debug
+fluentd:
+  protocol: http
+cloudwatch:
+  log:
+    group: app
+alertmanager: true
+healthcheck: true
+prometheus: true
+logrotate: true
+opentelemetry: true
+elasticsearch host: localhost
+logGroup: app

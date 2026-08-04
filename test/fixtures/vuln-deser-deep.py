@@ -1,0 +1,12 @@
+import pickle, marshal, shelve, yaml, jsonpickle, xml.etree.ElementTree as ET, lxml.etree, xml.dom.pulldom, xml.sax
+pickle.loads(data)
+marshal.loads(data)
+shelve.open("data")
+yaml.load(data)
+yaml.load(data, Loader=yaml.Loader)
+jsonpickle.decode(data)
+ET.fromstring(data)
+lxml.etree.fromstring(data)
+xml.dom.pulldom.parse(data)
+xml.sax.parse(data)
+eval(req.body)

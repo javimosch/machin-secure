@@ -1,0 +1,14 @@
+password: "hardcoded123"
+debug: true
+trust: all
+allow-origin: "*"
+Strict-Transport-Security: {}
+Content-Security-Policy: "unsafe-inline"
+X-Frame-Options: {}
+X-Content-Type-Options: {}
+default-src: "*"
+server_tokens: on
+ssl_protocols: TLSv1
+client_max_body_size: 0
+ServerTokens: Full
+Allow from all

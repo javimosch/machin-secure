@@ -1,0 +1,7 @@
+wantAssertionsSigned: false
+wantMessagesSigned: false
+encryptAssertion: false
+clockSkew: 86400
+RelayState: req.query.state
+privateKey: "-----BEGIN PRIVATE KEY-----"
+nameID: req.query.name

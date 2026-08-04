@@ -1,0 +1,12 @@
+const crypto = require("crypto");
+crypto.createHash("md2");
+crypto.createHash("md4");
+crypto.createHash("sha1");
+crypto.createHash("sha224");
+Math.random();
+const key = "hardcodedkey12345678";
+const iv = "0000000000000000";
+const cipher = crypto.createCipheriv("aes-128-ecb", key, null);
+crypto.createCipheriv("aes-128-cbc", key, iv);
+hmac.compareDigest == true;
+crypto.createCipheriv("aes-256-cbc", key, iv);

@@ -1,0 +1,3 @@
+authenticator: AllowAllAuthenticator
+allow_all_authenticator: true
+CASSANDRA_PASSWORD: "hardcoded123"

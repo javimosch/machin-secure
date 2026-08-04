@@ -1,0 +1,7 @@
+{
+  "alg": "none",
+  "nonce": null,
+  "jwks_uri": "http://keys.example.com/jwks",
+  "verify": false,
+  "response_type": "id_token"
+}

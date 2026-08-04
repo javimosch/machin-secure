@@ -1,0 +1,16 @@
+const express = require("express");
+const cors = require("cors");
+const session = require("express-session");
+const morgan = require("morgan");
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded());
+app.use(express.static("/"));
+app.use(cors({ credentials: true, origin: "*" }));
+app.use(session({ secret: "keyboard cat" }));
+app.use(morgan("dev"));
+res.sendFile(req.query.file);
+res.download(req.query.file);
+res.redirect(req.query.url);
+res.render(req.query.template);
+const limiter = require("express-rate-limit");

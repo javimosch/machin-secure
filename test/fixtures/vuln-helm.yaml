@@ -1,0 +1,10 @@
+securityContext:
+  privileged: true
+  readOnlyRootFilesystem: false
+  runAsUser: 0
+  runAsNonRoot: false
+hostNetwork: true
+hostPID: true
+image: nginx:latest
+imagePullPolicy: Always
+resources: {}

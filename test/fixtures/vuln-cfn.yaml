@@ -1,0 +1,44 @@
+Resources:
+  Bucket:
+    Properties:
+      AccessControl: PublicRead
+  SG:
+    Properties:
+      SecurityGroupIngress:
+        CidrIp: "0.0.0.0/0"
+  Role:
+    Properties:
+      Action: "*"
+  DB:
+    Properties:
+      PubliclyAccessible: true
+      StorageEncrypted: false
+      RequireSSL: false
+      MasterUserPassword: "supersecret123"
+  Volume:
+    Properties:
+      Encrypted: false
+  Method:
+    Properties:
+      AuthorizationType: "NONE"
+  Distribution:
+    Properties:
+      ViewerProtocolPolicy: "allow-all"
+  Cache:
+    Properties:
+      AtRestEncryptionEnabled: false
+  Lambda:
+    Properties:
+      Principal: "*"
+  DynamoDB:
+    Properties:
+      SSESpecification: { Enabled: false }
+  S3Versioning:
+    Properties:
+      VersioningConfiguration: { Status: "Suspended" }
+  S3Encryption:
+    Properties:
+      BucketEncryption: {}
+  WAF:
+    Properties:
+      WebACLArn: ""

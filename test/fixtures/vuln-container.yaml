@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+    securityContext:
+      privileged: true
+      runAsUser: 0
+      runAsNonRoot: false
+      allowPrivilegeEscalation: true
+      readOnlyRootFilesystem: false
+    hostNetwork: true
+    hostPID: true
+    hostIPC: true
+    resources: {}
+    env:
+    - name: PASSWORD
+      value: secret
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: docker-sock
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+  serviceAccountName: default
+  automountServiceAccountToken: true
+cap_add:
+- ALL
+NetworkPolicy: {}
+PodDisruptionBudget: {}
+livenessProbe: {}
+readinessProbe: {}
+cap_drop: []
+security_opt: []

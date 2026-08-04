@@ -1,0 +1,5 @@
+tls:
+  minVersion: TLSv1.0
+  maxVersion: TLSv1.2
+  ciphers: eNULL
+  ciphers: EXPORT

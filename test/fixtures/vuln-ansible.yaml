@@ -1,0 +1,17 @@
+- hosts: all
+  tasks:
+    - name: run
+      shell: "echo {{ user_input | quote }}"
+      command: "ls {{ dir | quote }}"
+    - name: download
+      get_url:
+        url: "http://example.com/file.tar.gz"
+    - name: chmod
+      file:
+        path: /tmp/x
+        mode: 0777
+  vars:
+    ansible_become_password: ""
+    password: "hardcoded123"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  become: false
