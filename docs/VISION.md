@@ -81,6 +81,7 @@ engine.
 - [x] **v2 — performance**: `--diff` / `--diff-base` for CI, `--workers N` for parallel full scans.
 - [x] **v3 — CI integration**: SARIF 2.1.0 output, reusable GitHub Action, `security-events: write`.
 - [x] **v4 — rule pack expansion**: 84 CWE-tagged detections across 16 languages.
+- [x] **v5 — IaC + frameworks + more CWE**: 119 rules across 17 languages — Terraform/Kubernetes/Docker IaC misconfigurations, Django/Flask/FastAPI/Spring framework rules, CSRF/mass-assignment/ReDoS/log-injection/weak-TLS.
 - [ ] **Baseline mode**: snapshot current findings as accepted state; future runs surface only *new* findings. Pairs with `--diff` — the path to usable static analysis in real codebases (you can't fix 500 legacy issues at once).
 - [ ] **Community rule packs**: split `rules.json` into per-language or per-framework packs that can be contributed independently of the engine.
 - [ ] **Tree-sitter precision** (maybe): AST-based matching for fewer false positives. High effort, breaks single-binary KISS — only if the agent-verdict filter proves insufficient in practice.

@@ -100,5 +100,45 @@
 
   {"id":"cors-wildcard","pattern":"Access-Control-Allow-Origin.{0,20}[\"']\\*[\"']","severity":"medium","cwe":"CWE-942","message":"CORS allows all origins (permissive)","langs":["js","ts","go","php","rb","java","kotlin","yaml","yml"]},
   {"id":"open-redirect-req","pattern":"(redirect|sendRedirect|RedirectTo)\\s*\\(.*req\\.(query|params|getParameter)","severity":"medium","cwe":"CWE-601","message":"redirect target from user input (open redirect)","langs":["js","ts","java","kotlin"]},
-  {"id":"xxe-external-entity","pattern":"<!ENTITY\\s+[^>]+\\s+SYSTEM","severity":"high","cwe":"CWE-611","message":"XML external entity declaration (XXE)","langs":["*"]}
+  {"id":"xxe-external-entity","pattern":"<!ENTITY\\s+[^>]+\\s+SYSTEM","severity":"high","cwe":"CWE-611","message":"XML external entity declaration (XXE)","langs":["*"]},
+
+  {"id":"tf-s3-public-acl","pattern":"acl\\s*=\\s*[\"']public-read","severity":"high","cwe":"CWE-732","message":"S3 bucket with public-read ACL (overly permissive)","langs":["terraform"]},
+  {"id":"tf-sg-open-world","pattern":"cidr_blocks\\s*=\\s*\\[[^]]*0\\.0\\.0\\.0/0","severity":"high","cwe":"CWE-668","message":"security group open to 0.0.0.0/0 (the whole internet)","langs":["terraform"]},
+  {"id":"tf-rds-no-encryption","pattern":"storage_encrypted\\s*=\\s*false","severity":"medium","cwe":"CWE-311","message":"RDS storage encryption disabled","langs":["terraform"]},
+  {"id":"tf-hardcoded-secret","pattern":"(password|secret_key|api_key|token|access_key)\\s*=\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in Terraform (use variables/sensitive)","langs":["terraform"]},
+  {"id":"tf-https-disabled","pattern":"enforce_https\\s*=\\s*false","severity":"medium","cwe":"CWE-295","message":"HTTPS enforcement disabled on a resource","langs":["terraform"]},
+
+  {"id":"k8s-privileged","pattern":"privileged\\s*:\\s*true","severity":"high","cwe":"CWE-250","message":"privileged container (root + all host capabilities)","langs":["yaml"]},
+  {"id":"k8s-run-as-root","pattern":"runAsUser\\s*:\\s*0","severity":"medium","cwe":"CWE-250","message":"container runs as root (runAsUser: 0)","langs":["yaml"]},
+  {"id":"k8s-host-path","pattern":"hostPath\\s*:","severity":"high","cwe":"CWE-250","message":"hostPath mount — container accesses host filesystem","langs":["yaml"]},
+  {"id":"k8s-host-network","pattern":"hostNetwork\\s*:\\s*true","severity":"medium","cwe":"CWE-250","message":"hostNetwork: true — container shares host network stack","langs":["yaml"]},
+  {"id":"k8s-latest-tag","pattern":"image\\s*:\\s*[^:\\s]+:latest","severity":"low","cwe":"CWE-1104","message":"container image uses :latest (non-reproducible)","langs":["yaml"]},
+  {"id":"k8s-allow-priv-escalation","pattern":"allowPrivilegeEscalation\\s*:\\s*true","severity":"high","cwe":"CWE-269","message":"allowPrivilegeEscalation: true (gain more privileges than parent)","langs":["yaml"]},
+
+  {"id":"docker-add-url","pattern":"^\\s*ADD\\s+https?://","severity":"medium","cwe":"CWE-829","message":"ADD with a URL fetch (use COPY + pinned deps instead)","langs":["dockerfile"]},
+  {"id":"docker-latest-tag","pattern":"^\\s*FROM\\s+\\S+:latest","severity":"low","cwe":"CWE-1104","message":"FROM :latest (non-reproducible builds — pin a digest/tag)","langs":["dockerfile"]},
+  {"id":"docker-apt-upgrade","pattern":"apt-get\\s+(upgrade|dist-upgrade)","severity":"low","cwe":"CWE-1104","message":"apt-get upgrade in Dockerfile (unreproducible — pin versions)","langs":["dockerfile"]},
+  {"id":"docker-copy-all","pattern":"COPY\\s+\\.\\s+\\.","severity":"low","cwe":"CWE-540","message":"COPY . . copies everything (may leak secrets/.git into image)","langs":["dockerfile"]},
+
+  {"id":"django-allowed-hosts-wildcard","pattern":"ALLOWED_HOSTS\\s*=\\s*\\[[^]]*\"\\*\"","severity":"medium","cwe":"CWE-209","message":"ALLOWED_HOSTS = ['*'] accepts any Host header (host-header injection)","langs":["py"]},
+  {"id":"django-ssl-redirect-false","pattern":"SECURE_SSL_REDIRECT\\s*=\\s*False","severity":"medium","cwe":"CWE-295","message":"SECURE_SSL_REDIRECT disabled (no HTTPS enforcement)","langs":["py"]},
+  {"id":"django-csrf-exempt","pattern":"@csrf_exempt","severity":"high","cwe":"CWE-352","message":"@csrf_exempt disables CSRF protection on a view","langs":["py"]},
+  {"id":"django-session-cookie-secure-false","pattern":"SESSION_COOKIE_SECURE\\s*=\\s*False","severity":"medium","cwe":"CWE-614","message":"session cookie sent over HTTP (SESSION_COOKIE_SECURE=False)","langs":["py"]},
+  {"id":"flask-debug-run","pattern":"app\\.run\\(.*debug\\s*=\\s*True","severity":"high","cwe":"CWE-489","message":"Flask app.run(debug=True) — Werkzeug debugger is an RCE","langs":["py"]},
+  {"id":"flask-secret-key-hardcoded","pattern":"app\\.secret_key\\s*=\\s*['\"][^'\"]{8,}['\"]","severity":"high","cwe":"CWE-798","message":"Flask secret_key hardcoded in source","langs":["py"]},
+  {"id":"fastapi-cors-wildcard","pattern":"allow_origins\\s*=\\s*\\[[^]]*\"\\*\"","severity":"medium","cwe":"CWE-942","message":"FastAPI CORS allows all origins","langs":["py"]},
+  {"id":"spring-actuator-expose-all","pattern":"(management\\.endpoints\\.web\\.exposure\\.include\\s*=\\s*\\*|include\\s*:\\s*[\"']\\*[\"'])","severity":"medium","cwe":"CWE-200","message":"Spring Boot actuator endpoints exposed (includes env/heapdump)","langs":["yaml","json"]},
+  {"id":"express-json-body-nolimit","pattern":"\\.use\\(\\s*json\\(\\s*\\)","severity":"low","cwe":"CWE-770","message":"express.json() mounted with no size limit (DoS via large body)","langs":["js","ts"]},
+
+  {"id":"py-traceback-print","pattern":"traceback\\.print_exc","severity":"medium","cwe":"CWE-209","message":"traceback.print_exc leaks stack traces to the client","langs":["py"]},
+  {"id":"py-subprocess-popen-shell","pattern":"Popen\\(.*shell\\s*=\\s*True","severity":"high","cwe":"CWE-78","message":"subprocess.Popen with shell=True (command injection)","langs":["py"]},
+  {"id":"py-mass-assignment","pattern":"\\*\\*req\\.(body|GET|POST)","severity":"medium","cwe":"CWE-915","message":"**req.body unpacks user input into model (mass assignment)","langs":["py"]},
+  {"id":"js-mass-assignment","pattern":"\\.create\\(.*req\\.(body|query)","severity":"medium","cwe":"CWE-915","message":"model.create with raw req.body (mass assignment)","langs":["js","ts"]},
+  {"id":"log-injection-req","pattern":"(logger|console)\\.(log|info|debug|warn)\\(.*req\\.(query|params|body|headers)","severity":"low","cwe":"CWE-117","message":"user input logged unsanitized (log injection / log forging)","langs":["js","ts","py","go","java","kotlin"]},
+  {"id":"redos-nested-quantifier","pattern":"\\([^()]+[+*][^()]*\\)[+*]","severity":"medium","cwe":"CWE-1333","message":"nested quantifier in regex (ReDoS — catastrophic backtracking)","langs":["js","ts","py","go","java","kotlin","rb"]},
+  {"id":"weak-tls-version","pattern":"(SSLv3|TLSv?1(\\.?[01])?[^0-9.])","severity":"high","cwe":"CWE-327","message":"deprecated/weak TLS version (SSLv3 or TLS 1.0/1.1)","langs":["js","ts","py","go","java","kotlin","yaml"]},
+  {"id":"hardcoded-password-assign","pattern":"(password|passwd|pass)\\s*[:=]\\s*[\"'][^\"']{6,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded password in source","langs":["py","js","ts","go","java","kotlin","rb","php","cs","c","cpp","rust","swift"]},
+  {"id":"samesite-none","pattern":"sameSite\\s*:\\s*['\"]none['\"]","severity":"low","cwe":"CWE-1275","message":"cookie SameSite=None (CSRF risk unless Strict/Required)","langs":["js","ts"]},
+  {"id":"py-tempfile-mktemp","pattern":"tempfile\\.mktemp","severity":"medium","cwe":"CWE-377","message":"tempfile.mktemp is race-prone (use mkstemp)","langs":["py"]},
+  {"id":"js-http-origin-header","pattern":"Origin\\s*===\\s*['\"]\\*['\"]","severity":"medium","cwe":"CWE-942","message":"Origin check accepts '*' (permissive CORS)","langs":["js","ts"]}
 ]

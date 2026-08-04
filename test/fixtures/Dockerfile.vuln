@@ -1,0 +1,5 @@
+FROM node:latest
+ADD https://example.com/script.sh /tmp/
+RUN apt-get update && apt-get upgrade -y
+COPY . .
+CMD ["node", "app.js"]

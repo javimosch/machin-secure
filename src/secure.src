@@ -117,6 +117,7 @@ func lang_of(path) (lang) {
 	if ext == "java" { lang = "java" ; return }
 	if ext == "sh" { lang = "sh" ; return }
 	if ext == "yml" || ext == "yaml" { lang = "yaml" ; return }
+	if ext == "tf" || ext == "tfvars" { lang = "terraform" ; return }
 	if ext == "xml" { lang = "xml" ; return }
 	if ext == "json" { lang = "json" ; return }
 	if ext == "md" { lang = "md" ; return }
@@ -306,7 +307,7 @@ func collect_files(dir, depth) (jobs) {
 // lazily per-file, per the old lang_rules_cache global) means no worker ever
 // writes to a shared map — each just reads its own entry, which is race-free.
 func all_langs() (langs) {
-	langs = []string{"py", "js", "ts", "tsx", "jsx", "vue", "go", "rust", "c", "cpp", "cs", "kotlin", "swift", "php", "rb", "java", "sh", "yaml", "xml", "json", "env", "md", "dockerfile"}
+	langs = []string{"py", "js", "ts", "tsx", "jsx", "vue", "go", "rust", "c", "cpp", "cs", "kotlin", "swift", "php", "rb", "java", "sh", "yaml", "terraform", "xml", "json", "env", "md", "dockerfile"}
 }
 
 func build_lang_rules_index(rules) (idx) {
