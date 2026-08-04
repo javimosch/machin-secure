@@ -9,3 +9,10 @@ $hash2 = sha1($_POST['password']);
 $hashed = crypt($_POST['password'], "salt");
 echo "http://10.0.0.1/api";
 ?>
+<?php
+DB::raw("SELECT * FROM users WHERE id=" . $id);
+?>
+<div>{!! $user_input !!}</div>
+<?php
+$key = env("API_KEY");
+?>

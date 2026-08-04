@@ -179,11 +179,11 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 
 ## Verified against
 
-- `test/fixtures/` — synthetic positives across 24 languages
+- `test/fixtures/` — synthetic positives across 25 languages
   (Python, JS/TS, Go, Rust, C/C++, C#, Java/Kotlin, Ruby, Shell, Swift, PHP,
-  YAML, Terraform, Dockerfile, XML, TOML, .properties, INI, requirements.txt,
-  Gemfile, JSON — 40+ fixture files), all 188 rules' expected findings fire;
-  SARIF output validated against `sarif-2.1.0.json`.
+  YAML, Terraform, Dockerfile, XML, TOML, .properties, plist, INI,
+  requirements.txt, Gemfile, JSON — 55+ fixture files), all 235 rules'
+  expected findings fire; SARIF output validated against `sarif-2.1.0.json`.
 - `~/pr/multi-assistant` — 10,398 files scanned, 1950 findings including a
   real hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
 - `~/pr/v3` — 35,865 files scanned in ~13 min, 1680 findings.

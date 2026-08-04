@@ -60,7 +60,7 @@
 </head>
 <body>
 <header><div class="wrap">
-  <div class="badge">v1.4.0 · 188 rules · 24 languages · SARIF 2.1.0</div>
+  <div class="badge">v1.5.0 · 235 rules · 25 languages · SARIF 2.1.0</div>
   <h1>machin-secure</h1>
   <p class="tag">A security auditor where the tool owns <b>no model</b> — the calling agent <i>is</i> the LLM.<br>
     Single ~88&nbsp;KB binary. Deterministic regex rules. Agent-managed verdicts. CI-native.</p>
@@ -126,7 +126,7 @@
 </section>
 
 <section id="rules">
-  <h2>188 CWE-tagged detections across 24 languages</h2>
+  <h2>235 CWE-tagged detections across 25 languages</h2>
   <p class="lead"><code>rules.json</code> is plain data, read fresh from disk every run — extend it without recompiling. The rule pack is the actual product; the engine is interchangeable.</p>
   <div class="grid">
     <div class="card"><h3>Secrets</h3><p><span class="sev crit">CWE-798</span> AWS, Google, Slack, GitHub PAT, Stripe, JWT, private keys, generic high-entropy, connection strings, config files (.properties, TOML, INI), hardcoded JWT secrets.</p></div>
@@ -145,9 +145,15 @@
     <div class="card"><h3>Crypto misuse</h3><p><span class="sev high">CWE-327/329/780</span> ECB mode, hardcoded IV/nonce/salt, AES-128/192, RSA <3072, PKCS1v1.5 padding (oracle attacks), deprecated crypto.random, MD5/SHA1 for passwords (5 languages).</p></div>
     <div class="card"><h3>PHP injection</h3><p><span class="sev crit">CWE-89/95/98/502</span> SQL with $_GET/$_POST, eval/include/unserialize with user input, file_get_contents SSRF, md5/sha1/crypt for passwords.</p></div>
     <div class="card"><h3>Info disclosure</h3><p><span class="sev med">CWE-209/489/532/547</span> debug console.log, print with secrets, hardcoded IPs, HTTP (not HTTPS) URLs, verbose errors in prod, assert for sensitive checks, file upload without validation.</p></div>
+    <div class="card"><h3>C/C++ deep dive</h3><p><span class="sev high">CWE-134/120/770</span> format string attacks (printf/fprintf with variable), scanf %s without bounds, alloca (stack overflow), strtok (not thread-safe), atoi (no error handling), getenv without validation.</p></div>
+    <div class="card"><h3>Rust / Go / Java</h3><p><span class="sev high">CWE-704/761/74/94</span> Rust transmute/from_raw/raw pointers/ptr::read/write, Go unsafe.Pointer/cgo/Sprintf-SQL/no-TLS, Java JNDI injection (Log4Shell), SpEL injection, XPath injection, SSRF, XML TransformerFactory (XXE).</p></div>
+    <div class="card"><h3>Mobile (Android/iOS)</h3><p><span class="sev high">CWE-489/319/749</span> Android: debuggable=true, cleartext traffic, allowBackup, exported components, WebView JS + addJavascriptInterface (RCE). iOS: ATS disabled, plist secrets.</p></div>
+    <div class="card"><h3>Rails / Laravel</h3><p><span class="sev crit">CWE-352/1336/89/79</span> Rails: CSRF skip, render with params (SSTI), attr_accessible. Laravel: DB::raw SQL injection, Blade {!! !!} (XSS), env() in code.</p></div>
+    <div class="card"><h3>Cloud + DB</h3><p><span class="sev high">CWE-732/89/94/943</span> AWS S3 public-read, IAM wildcard Action/Resource, hardcoded AWS creds. Redis EVAL injection, Elasticsearch query_string injection, ORDER BY injection.</p></div>
+    <div class="card"><h3>Network + supply chain</h3><p><span class="sev med">CWE-319/1104</span> FTP/Telnet (cleartext), SMTP without TLS, GitHub Actions @main/@master (not pinned to SHA), npm postinstall scripts, pip install from git URLs.</p></div>
   </div>
   <p style="margin-top:14px">
-    <span class="lang">Python</span><span class="lang">JS/TS</span><span class="lang">Vue</span><span class="lang">Go</span><span class="lang">Rust</span><span class="lang">C/C++</span><span class="lang">C#</span><span class="lang">Java/Kotlin</span><span class="lang">Ruby</span><span class="lang">Shell</span><span class="lang">Swift</span><span class="lang">PHP</span><span class="lang">YAML</span><span class="lang">Terraform</span><span class="lang">Dockerfile</span><span class="lang">XML</span><span class="lang">TOML</span><span class="lang">.properties</span><span class="lang">INI</span><span class="lang">requirements.txt</span><span class="lang">Gemfile</span><span class="lang">JSON</span>
+    <span class="lang">Python</span><span class="lang">JS/TS</span><span class="lang">Vue</span><span class="lang">Go</span><span class="lang">Rust</span><span class="lang">C/C++</span><span class="lang">C#</span><span class="lang">Java/Kotlin</span><span class="lang">Ruby</span><span class="lang">Shell</span><span class="lang">Swift</span><span class="lang">PHP</span><span class="lang">YAML</span><span class="lang">Terraform</span><span class="lang">Dockerfile</span><span class="lang">XML</span><span class="lang">TOML</span><span class="lang">.properties</span><span class="lang">plist</span><span class="lang">INI</span><span class="lang">requirements.txt</span><span class="lang">Gemfile</span><span class="lang">JSON</span>
   </p>
 </section>
 

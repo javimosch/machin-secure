@@ -1,0 +1,6 @@
+{
+  "name": "app",
+  "scripts": {
+    "postinstall": "node install.js"
+  }
+}

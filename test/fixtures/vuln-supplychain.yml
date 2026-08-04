@@ -1,0 +1,8 @@
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - run: pip install git+https://github.com/user/repo.git

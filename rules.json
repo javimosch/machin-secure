@@ -215,5 +215,64 @@
   {"id":"php-eval-user","pattern":"eval\\s*\\(.*\\$_(GET|POST|REQUEST)","severity":"critical","cwe":"CWE-95","message":"eval() with user input (arbitrary code execution)","langs":["php"]},
   {"id":"php-sql-raw-get","pattern":"(mysql_query|mysqli_query|pg_query|->query)\\s*\\(.*\\$_(GET|POST|REQUEST)","severity":"critical","cwe":"CWE-89","message":"SQL query with raw $_GET/$_POST (SQL injection)","langs":["php"]},
   {"id":"php-include-user","pattern":"(include|require)(_once)?\\s*\\(.*\\$_(GET|POST|REQUEST)","severity":"critical","cwe":"CWE-98","message":"include/require with user input (LFI/RFI — file inclusion)","langs":["php"]},
-  {"id":"php-unserialize-user","pattern":"unserialize\\s*\\(.*\\$_(GET|POST|REQUEST|COOKIE)","severity":"critical","cwe":"CWE-502","message":"unserialize with user input (PHP object injection → RCE)","langs":["php"]}
+  {"id":"php-unserialize-user","pattern":"unserialize\\s*\\(.*\\$_(GET|POST|REQUEST|COOKIE)","severity":"critical","cwe":"CWE-502","message":"unserialize with user input (PHP object injection → RCE)","langs":["php"]},
+
+  {"id":"c-printf-user","pattern":"\\bprintf\\s*\\(\\s*[a-zA-Z_][a-zA-Z0-9_]*\\s*\\)","severity":"high","cwe":"CWE-134","message":"printf with variable as format string (format string attack — use printf(\"%s\", var))","langs":["c","cpp"]},
+  {"id":"c-fprintf-user","pattern":"\\bfprintf\\s*\\([^,]+,\\s*[a-zA-Z_][a-zA-Z0-9_]*\\s*\\)","severity":"high","cwe":"CWE-134","message":"fprintf with variable as format string (format string attack)","langs":["c","cpp"]},
+  {"id":"c-scanf-no-bounds","pattern":"\\bscanf\\s*\\(\\s*[\"']%s[\"']","severity":"high","cwe":"CWE-120","message":"scanf with %s and no width limit (buffer overflow — use %99s or fgets)","langs":["c","cpp"]},
+  {"id":"c-alloca","pattern":"\\balloca\\s*\\(","severity":"medium","cwe":"CWE-770","message":"alloca allocates on the stack (unbounded input → stack overflow)","langs":["c","cpp"]},
+  {"id":"c-strtok","pattern":"\\bstrtok\\s*\\(","severity":"low","cwe":"CWE-362","message":"strtok is not thread-safe (use strtok_r)","langs":["c","cpp"]},
+  {"id":"c-atoi","pattern":"\\batoi\\s*\\(","severity":"low","cwe":"CWE-190","message":"atoi has no error handling (use strtol and check errno)","langs":["c","cpp"]},
+  {"id":"c-getenv-direct","pattern":"\\bgetenv\\s*\\(","severity":"low","cwe":"CWE-807","message":"getenv result used without validation (environment can be manipulated)","langs":["c","cpp"]},
+
+  {"id":"rust-transmute","pattern":"std::mem::transmute|mem::transmute","severity":"high","cwe":"CWE-704","message":"transmute reinterprets memory (type confusion — undefined behavior)","langs":["rust"]},
+  {"id":"rust-from-raw","pattern":"(Box|Arc|Rc)::from_raw|from_raw_parts","severity":"medium","cwe":"CWE-761","message":"from_raw — manual memory management (unsafe, double-free risk)","langs":["rust"]},
+  {"id":"rust-raw-pointer","pattern":"\\bas_mut_ptr\\s*\\(|\\bas_ptr\\s*\\(","severity":"medium","cwe":"CWE-761","message":"raw pointer extraction bypasses Rust's borrow checker","langs":["rust"]},
+  {"id":"rust-ptr-read-write","pattern":"std::ptr::(read|write)\\s*\\(|ptr::(read|write)\\s*\\(","severity":"high","cwe":"CWE-761","message":"raw pointer read/write bypasses Rust's safety guarantees","langs":["rust"]},
+  {"id":"rust-unwrap-prod","pattern":"\\.unwrap\\s*\\(\\s*\\)","severity":"low","cwe":"CWE-755","message":".unwrap() panics on None/Err (use expect with context or handle properly)","langs":["rust"]},
+
+  {"id":"go-unsafe-pointer","pattern":"unsafe\\.Pointer\\s*\\(","severity":"medium","cwe":"CWE-704","message":"unsafe.Pointer bypasses Go's type safety","langs":["go"]},
+  {"id":"go-cgo","pattern":"\"C\"\\s*$|import\\s+\"C\"","severity":"low","cwe":"CWE-733","message":"cgo import — crosses memory safety boundary into C","langs":["go"]},
+  {"id":"go-sprintf-sql","pattern":"fmt\\.Sprintf\\s*\\(.*SELECT|INSERT|UPDATE|DELETE","severity":"high","cwe":"CWE-89","message":"fmt.Sprintf in SQL query (SQL injection)","langs":["go"]},
+  {"id":"go-http-no-tls","pattern":"http\\.ListenAndServe\\s*\\(","severity":"medium","cwe":"CWE-319","message":"HTTP server without TLS (use ListenAndServeTLS for production)","langs":["go"]},
+
+  {"id":"java-jndi-injection","pattern":"\\.lookup\\s*\\(.*req\\.","severity":"critical","cwe":"CWE-74","message":"JNDI lookup with user input (RCE — Log4Shell pattern)","langs":["java","kotlin"]},
+  {"id":"java-spel-injection","pattern":"parseExpression\\s*\\(.*req\\.","severity":"critical","cwe":"CWE-94","message":"SpEL parseExpression with user input (code injection)","langs":["java","kotlin"]},
+  {"id":"java-xpath-injection","pattern":"\\.evaluate\\s*\\(.*\\+.*req\\.","severity":"high","cwe":"CWE-643","message":"XPath evaluate with string concatenation (XPath injection)","langs":["java","kotlin"]},
+  {"id":"java-urlconnection-ssrf","pattern":"(new\\s+URL|URLConnection)\\s*\\(.*req\\.","severity":"high","cwe":"CWE-918","message":"URL/URLConnection with user input (SSRF)","langs":["java","kotlin"]},
+  {"id":"java-xml-transformer","pattern":"TransformerFactory\\.newInstance","severity":"low","cwe":"CWE-611","message":"XML TransformerFactory — verify external entities are disabled (XXE)","langs":["java","kotlin"]},
+
+  {"id":"android-debuggable","pattern":"android:debuggable\\s*=\\s*[\"']true[\"']","severity":"high","cwe":"CWE-489","message":"android:debuggable=true in production (allows debugging / data extraction)","langs":["xml"]},
+  {"id":"android-cleartext","pattern":"usesCleartextTraffic\\s*=\\s*[\"']true[\"']","severity":"medium","cwe":"CWE-319","message":"usesCleartextTraffic=true (allows HTTP — cleartext traffic)","langs":["xml"]},
+  {"id":"android-allow-backup","pattern":"android:allowBackup\\s*=\\s*[\"']true[\"']","severity":"low","cwe":"CWE-530","message":"android:allowBackup=true (app data can be extracted via adb backup)","langs":["xml"]},
+  {"id":"android-webview-js","pattern":"setJavaScriptEnabled\\s*\\(\\s*true","severity":"medium","cwe":"CWE-749","message":"WebView with JavaScript enabled (XSS risk if loading untrusted content)","langs":["java","kotlin"]},
+  {"id":"android-webview-interface","pattern":"addJavascriptInterface\\s*\\(","severity":"high","cwe":"CWE-749","message":"addJavascriptInterface exposes Java to JS (RCE on Android < 4.2)","langs":["java","kotlin"]},
+  {"id":"android-exported-no-perm","pattern":"android:exported\\s*=\\s*[\"']true[\"']","severity":"medium","cwe":"CWE-285","message":"exported component without permission (other apps can invoke it)","langs":["xml"]},
+
+  {"id":"ios-ats-disabled","pattern":"NSAllowsArbitraryLoads\\s*:\\s*true|NSAllowsArbitraryLoads\\s*</","severity":"medium","cwe":"CWE-319","message":"App Transport Security disabled (allows cleartext HTTP)","langs":["plist","xml"]},
+  {"id":"ios-plist-secret","pattern":"<key>\\s*(api[._-]?key|secret|password|token|private[._-]?key)","severity":"high","cwe":"CWE-798","message":"secret-named key in plist file (hardcoded secret — use Keychain/secure storage)","langs":["plist","xml"]},
+
+  {"id":"rails-csrf-skip","pattern":"skip_before_action\\s+:verify_authenticity_token|skip_before_filter\\s+:verify_authenticity_token","severity":"high","cwe":"CWE-352","message":"CSRF protection skipped on a controller","langs":["rb"]},
+  {"id":"rails-render-user","pattern":"render\\s+params\\[|render\\s*\\(.*params\\[","severity":"critical","cwe":"CWE-1336","message":"render with user input (SSTI — server-side template injection)","langs":["rb"]},
+  {"id":"rails-attr-accessible","pattern":"attr_accessible","severity":"low","cwe":"CWE-915","message":"attr_accessible is deprecated (use strong parameters)","langs":["rb"]},
+
+  {"id":"laravel-db-raw","pattern":"DB::(raw|select|statement)\\s*\\(.*\\$","severity":"high","cwe":"CWE-89","message":"DB::raw/select with variable (SQL injection — use parameterized queries)","langs":["php"]},
+  {"id":"laravel-blade-unescaped","pattern":"\\{!!.*!!\\}","severity":"medium","cwe":"CWE-79","message":"Blade {!! !!} outputs unescaped content (XSS — use {{ }} instead)","langs":["php"]},
+  {"id":"laravel-env-in-code","pattern":"\\benv\\s*\\(\\s*[\"'][A-Z_]+[\"']\\)","severity":"low","cwe":"CWE-565","message":"env() in code (not cached in production — use config())","langs":["php"]},
+
+  {"id":"aws-s3-public-read","pattern":"(PublicRead|public-read|public-read-write|CannedAccessControlList\\.PublicRead)","severity":"high","cwe":"CWE-732","message":"S3 bucket/object set to public-read (overly permissive)","langs":["py","js","ts","go","java","kotlin"]},
+  {"id":"aws-iam-wildcard","pattern":"[\"']?(Action|Resource)[\"']?\\s*[:=]\\s*[\"']\\*[\"']","severity":"high","cwe":"CWE-732","message":"IAM policy with wildcard Action or Resource (overly permissive)","langs":["json","yaml","terraform"]},
+  {"id":"aws-hardcoded-creds","pattern":"(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)\\s*[:=]\\s*[\"'][A-Z0-9]{16,}[\"']","severity":"critical","cwe":"CWE-798","message":"hardcoded AWS credentials in source","langs":["py","js","ts","go","java","kotlin","sh","yaml","env"]},
+
+  {"id":"db-order-by-injection","pattern":"(ORDER BY|order by)\\s*.*\\+.*req\\.","severity":"high","cwe":"CWE-89","message":"ORDER BY with user input (SQL injection — cannot parameterize column names)","langs":["js","ts","py","java","kotlin","php"]},
+  {"id":"redis-eval-user","pattern":"\\.eval\\s*\\(.*req\\.","severity":"high","cwe":"CWE-94","message":"Redis EVAL with user input (Lua code injection)","langs":["js","ts","py","go","java","kotlin"]},
+  {"id":"es-query-string-user","pattern":"query_string\\s*[:=].*req\\.","severity":"high","cwe":"CWE-943","message":"Elasticsearch query_string with user input (injection)","langs":["js","ts","py","java","kotlin"]},
+
+  {"id":"ftp-usage","pattern":"(ftp://|FTPClient|ftplib\\.FTP|FTP\\s*\\(|ftp\\.connect|ftp\\.login)","severity":"medium","cwe":"CWE-319","message":"FTP usage (cleartext protocol — use SFTP/FTPS)","langs":["py","js","ts","java","kotlin","go","c","cpp"]},
+  {"id":"telnet-usage","pattern":"(telnet://|TelnetClient|telnet\\.connect)","severity":"high","cwe":"CWE-319","message":"Telnet usage (cleartext protocol — use SSH)","langs":["py","js","ts","java","kotlin","go","c","cpp"]},
+  {"id":"smtp-no-tls","pattern":"(smtplib\\.SMTP\\s*\\(|nodemailer\\.createTransport\\s*\\(\\s*\\{[^}]*port\\s*:\\s*25)","severity":"medium","cwe":"CWE-319","message":"SMTP without TLS (email sent in cleartext)","langs":["py","js","ts"]},
+
+  {"id":"gha-action-at-branch","pattern":"uses:\\s*[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+@(main|master)","severity":"medium","cwe":"CWE-1104","message":"GitHub Action pinned to @main/@master (non-reproducible — pin to a SHA)","langs":["yaml"]},
+  {"id":"npm-postinstall-script","pattern":"\"postinstall\"\\s*:","severity":"low","cwe":"CWE-1104","message":"npm postinstall script (supply chain risk — runs on install)","langs":["json"]},
+  {"id":"pip-git-install","pattern":"pip\\s+install\\s+git\\+https?://","severity":"medium","cwe":"CWE-1104","message":"pip install from git URL (not pinned to a tag/SHA — supply chain risk)","langs":["sh","yaml"]}
 ]
