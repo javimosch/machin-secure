@@ -167,6 +167,9 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   call needed inside the tool at all.
 - POSIX ERE has no lookahead — don't write rules assuming PCRE features
   (e.g. `(?!...)`) as they'll silently no-op.
+- MFL's `regex_match` uses POSIX ERE, where `\d` is NOT supported (it silently
+  fails to match). Use `[0-9]` instead. `\b`, `\s`, `\w` DO work. This was
+  caught by the `hardcoded-ip` rule silently failing to match any IP.
 - `json_get(json, path)` needs a leading `.` (e.g. `.url`, not `url`) and
   returns the raw JSON token — a string value comes back quoted; strip quotes
   before use if you add a call site that needs it.
@@ -179,7 +182,7 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 - `test/fixtures/` — synthetic positives across 24 languages
   (Python, JS/TS, Go, Rust, C/C++, C#, Java/Kotlin, Ruby, Shell, Swift, PHP,
   YAML, Terraform, Dockerfile, XML, TOML, .properties, INI, requirements.txt,
-  Gemfile, JSON — 30+ fixture files), all 147 rules' expected findings fire;
+  Gemfile, JSON — 40+ fixture files), all 188 rules' expected findings fire;
   SARIF output validated against `sarif-2.1.0.json`.
 - `~/pr/multi-assistant` — 10,398 files scanned, 1950 findings including a
   real hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
