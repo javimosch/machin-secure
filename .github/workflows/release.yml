@@ -1,0 +1,114 @@
+name: release
+
+# Cut a release by pushing a semver tag:
+#   git tag v2.0.0 && git push origin v2.0.0
+# This builds the `secure` binary on ubuntu-latest (glibc, matching the
+# github-hosted runner the action runs on), bundles it with rules.json, and
+# attaches the tarball + SHA256SUMS to the release. It then syncs the moving
+# major tag (vN) to the same commit and mirrors the assets to that tag's
+# release, so `uses: javimosch/machin-secure@vN` always resolves to the latest
+# vN.x with a downloadable binary.
+#
+# The composite action (action.yml) downloads this tarball at runtime instead
+# of rebuilding the compiler on every scan — the difference between a
+# multi-minute cold start and a ~380 KB HTTP fetch.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write   # create releases, move the major tag
+  packages: write   # push the image to ghcr.io (optional Docker path)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps (Go + C compiler)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+          # machin is a Go compiler that emits C; secure is built by `machin build`.
+          # setup-go below provides Go; gcc is preinstalled on ubuntu-latest but
+          # make it explicit in case the runner image changes.
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build machin (pinned to MACHIN_REF)
+        env:
+          # Pin machin to an immutable commit SHA for reproducible action builds.
+          # Currently v0.123.0 (565c25c) — the release that added the 3-value
+          # stat/exec multi-assign this tool relies on. Bump when machin-secure
+          # needs a newer machin feature.
+          MACHIN_REF: 565c25c
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/machin-bin"
+          cd "$RUNNER_TEMP"
+          curl -sSL "https://github.com/javimosch/machin/archive/${MACHIN_REF}.tar.gz" | tar xz
+          mv machin-* machin
+          cd machin
+          go build -o "$RUNNER_TEMP/machin-bin/machin" .
+          echo "$RUNNER_TEMP/machin-bin" >> "$GITHUB_PATH"
+
+      - name: Build secure
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/machin-bin:$PATH"
+          machin --help | head -1   # sanity: machin is on PATH
+          ./build.sh
+
+      - name: Bundle binary + rules
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p dist/machin-secure
+          cp secure dist/machin-secure/secure
+          cp rules.json dist/machin-secure/rules.json
+          # Versioned name (for the v2.0.0 release) + stable name (for the
+          # moving v2 release, so the composite action can fetch it by a
+          # predictable URL regardless of the latest patch version).
+          ( cd dist && tar czf "machin-secure-${TAG}-linux-amd64.tar.gz" machin-secure )
+          ( cd dist && cp "machin-secure-${TAG}-linux-amd64.tar.gz" machin-secure-linux-amd64.tar.gz )
+          ( cd dist && sha256sum machin-secure-${TAG}-linux-amd64.tar.gz machin-secure-linux-amd64.tar.gz > SHA256SUMS.txt )
+          ls -l dist/
+
+      - name: Attach assets to the version release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt \
+              --generate-notes --title "${TAG}"
+          fi
+
+      - name: Sync the moving major tag (vN) and mirror assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"        # e.g. v2.0.0
+          MAJOR="${TAG%%.*}"              # e.g. v2
+          SHA="$(git rev-parse "$TAG^{commit}")"
+          # Move the major tag to the same commit (force, since it's a moving ref).
+          git tag -f "$MAJOR" "$SHA"
+          git push -f origin "$MAJOR"
+          # Mirror the stable-named asset to the major tag's release so
+          # `uses: ...@vN` can fetch machin-secure-linux-amd64.tar.gz by URL.
+          if gh release view "$MAJOR" >/dev/null 2>&1; then
+            gh release upload "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt \
+              --generate-notes --title "${MAJOR} (moving — latest ${TAG})"
+          fi
+          echo "Synced ${MAJOR} → ${SHA} (release ${TAG})"

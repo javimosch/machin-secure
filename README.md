@@ -72,9 +72,11 @@ CWE `helpUri`, a `level` (`error`/`warning`/`note`), and a GitHub
 ./secure --target . --sarif > machin-secure.sarif
 ```
 
-There's a reusable GitHub Action (this repo's `action.yml` + `Dockerfile`) that
-builds the binary in a pinned multi-stage image and writes the SARIF file. Drop
-this into `.github/workflows/machin-secure.yml` in any repo:
+There's a reusable GitHub Action (this repo's `action.yml`) that downloads the
+prebuilt `secure` binary + bundled `rules.json` from the release and writes the
+SARIF file. It's a composite action — no Docker, no per-run compiler build, just
+a ~380 KB fetch then the scan. Drop this into
+`.github/workflows/machin-secure.yml` in any repo:
 
 ```yaml
 name: machin-secure
@@ -100,6 +102,14 @@ The action exits `0` whether or not findings exist (so the SARIF upload always
 runs); severity gating is left to GitHub code-scanning settings. Inputs:
 `target` (default `.`), `rules` (default: the bundled rule pack),
 `output` (default `machin-secure.sarif`).
+
+Releases are cut by pushing a semver tag (`v2.0.0`); the
+[`release`](.github/workflows/release.yml) workflow builds the binary on
+ubuntu-latest, bundles it with `rules.json`, attaches the tarball to the
+release, and syncs the moving major tag (`v2`) to the same commit so
+`@v2` always resolves to the latest `v2.x`. Prefer the Docker image instead?
+`Dockerfile` + `entrypoint.sh` remain as a self-build recipe
+(`docker build -t machin-secure .`).
 
 ## The verdict loop (instead of an LLM filter)
 

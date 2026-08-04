@@ -92,17 +92,27 @@ hand-rolled escaping. Severity → SARIF level: critical/high → `error`,
 medium → `warning`, low → `note`. security-severity: critical 9.5, high 8.0,
 medium 5.0, low 2.0.
 
-The reusable GitHub Action (`action.yml` + `Dockerfile` + `entrypoint.sh`) is a
-Docker action: a multi-stage build pins machin to an immutable commit SHA
-(`MACHIN_REF` build arg, currently `565c25c` = v0.123.0 — the release that added
-the 3-value `stat`/`exec` multi-assign this tool uses; bump to a tag once
-v0.123.0 is released), builds `secure`, and copies the static binary + default
-`rules.json` into an alpine runtime. The entrypoint runs `secure --sarif` and
-writes the file, then exits `0` on both clean and findings (exit 2 from `secure`
-is reinterpreted as success so `upload-sarif` always runs); only exit 1 (real
-tool error) fails the step. The example workflow in
+The reusable GitHub Action (`action.yml`) is a **composite action**: it
+downloads the prebuilt `secure` binary + bundled `rules.json` tarball from the
+release (`https://github.com/javimosch/machin-secure/releases/download/<ref>/
+machin-secure-linux-amd64.tar.gz`, resolved via `github.action_repository` /
+`github.action_ref`), runs `secure --sarif`, and writes the file. No Docker, no
+per-run compiler build — a ~380 KB fetch then the scan. Exit handling mirrors
+the old entrypoint: exit 2 from `secure` (high/critical findings) is
+reinterpreted as success so `upload-sarif` always runs; only exit 1 (real tool
+error) fails the step. The example workflow in
 `.github/workflows/machin-secure.yml` shows the `security-events: write`
 permission and `github/codeql-action/upload-sarif@v3` upload.
+
+Releases are cut by pushing a semver tag (`v2.0.0`); the
+[`release`](.github/workflows/release.yml) workflow builds the binary on
+ubuntu-latest (glibc, matching the github-hosted runner), bundles it with
+`rules.json`, attaches the tarball + SHA256SUMS to the release, and syncs the
+moving major tag (`v2`) to the same commit + mirrors a stable-named asset
+(`machin-secure-linux-amd64.tar.gz`) to the major-tag release so `@v2` always
+resolves to the latest `v2.x`. `Dockerfile` + `entrypoint.sh` remain in the repo
+as a self-build Docker recipe (`docker build -t machin-secure .`) for users who
+prefer a container image; they are no longer used by the action.
 
 Exit codes: `0` clean, `1` error (e.g. bad target/rules), `2` high/critical
 findings present. Designed to be piped: `./secure --target . | jq 'select(.severity=="critical")'`.

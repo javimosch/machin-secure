@@ -10,9 +10,9 @@ inputs:
     required: false
     default: '.'
   rules:
-    description: 'Path to rules.json (defaults to the bundled rule pack)'
+    description: 'Path to rules.json (defaults to the rule pack bundled in the downloaded release)'
     required: false
-    default: '/usr/local/share/machin-secure/rules.json'
+    default: ''
   output:
     description: 'Path to write the SARIF file (relative to the repo root)'
     required: false
@@ -22,5 +22,56 @@ outputs:
     description: 'Path to the generated SARIF file'
     value: ${{ inputs.output }}
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: 'composite'
+  steps:
+    - name: Fetch the machin-secure binary
+      id: fetch
+      shell: bash
+      env:
+        ACTION_REPO: ${{ github.action_repository }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+        : "${ACTION_REPO:?action_repository is required}"
+        : "${ACTION_REF:?action_ref is required}"
+        # The release workflow publishes a stable-named tarball to the
+        # major-tag release (v2, v3, ...) so this URL is predictable
+        # regardless of the latest patch version.
+        URL="https://github.com/${ACTION_REPO}/releases/download/${ACTION_REF}/machin-secure-linux-amd64.tar.gz"
+        TOOL_DIR="$RUNNER_TEMP/machin-secure"
+        rm -rf "$TOOL_DIR"
+        mkdir -p "$TOOL_DIR"
+        echo "Fetching $URL"
+        curl -fsSL "$URL" | tar xz -C "$TOOL_DIR"
+        # The tarball extracts a `machin-secure/` dir containing `secure` + `rules.json`.
+        if [ ! -x "$TOOL_DIR/machin-secure/secure" ]; then
+          echo "::error::machin-secure binary not found in tarball (expected machin-secure/secure)"
+          exit 1
+        fi
+        chmod +x "$TOOL_DIR/machin-secure/secure"
+        echo "tool-dir=$TOOL_DIR/machin-secure" >> "$GITHUB_OUTPUT"
+
+    - name: Run machin-secure
+      shell: bash
+      env:
+        TOOL_DIR: ${{ steps.fetch.outputs.tool-dir }}
+        TARGET: ${{ inputs.target }}
+        RULES: ${{ inputs.rules }}
+        OUTPUT: ${{ inputs.output }}
+      run: |
+        set +e
+        RULES_PATH="${RULES:-$TOOL_DIR/rules.json}"
+        "$TOOL_DIR/secure" --sarif --target "$TARGET" --rules "$RULES_PATH" > "$OUTPUT"
+        code=$?
+        set -e
+        if [ "$code" = "1" ]; then
+          echo "::error::machin-secure failed (exit 1) — see SARIF output or run secure directly"
+          cat "$OUTPUT"
+          exit 1
+        fi
+        if [ "$code" = "2" ]; then
+          echo "::warning::machin-secure found high/critical findings — SARIF written to $OUTPUT"
+        else
+          echo "::notice::machin-secure scan complete — SARIF written to $OUTPUT"
+        fi
+        exit 0
