@@ -24,7 +24,12 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Build on ubuntu-22.04 (glibc 2.35) — the oldest current GitHub-hosted
+    # runner — so the binary's glibc requirement stays ≤ 2.35 and it runs on
+    # both ubuntu-22.04 and ubuntu-24.04 runners (forward-compatible). Building
+    # on ubuntu-latest (24.04, glibc 2.39) would emit GLIBC_2.38 symbols and
+    # break users who pin runs-on: ubuntu-22.04.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
