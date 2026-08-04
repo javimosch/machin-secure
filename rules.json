@@ -140,5 +140,36 @@
   {"id":"hardcoded-password-assign","pattern":"(password|passwd|pass)\\s*[:=]\\s*[\"'][^\"']{6,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded password in source","langs":["py","js","ts","go","java","kotlin","rb","php","cs","c","cpp","rust","swift"]},
   {"id":"samesite-none","pattern":"sameSite\\s*:\\s*['\"]none['\"]","severity":"low","cwe":"CWE-1275","message":"cookie SameSite=None (CSRF risk unless Strict/Required)","langs":["js","ts"]},
   {"id":"py-tempfile-mktemp","pattern":"tempfile\\.mktemp","severity":"medium","cwe":"CWE-377","message":"tempfile.mktemp is race-prone (use mkstemp)","langs":["py"]},
-  {"id":"js-http-origin-header","pattern":"Origin\\s*===\\s*['\"]\\*['\"]","severity":"medium","cwe":"CWE-942","message":"Origin check accepts '*' (permissive CORS)","langs":["js","ts"]}
+  {"id":"js-http-origin-header","pattern":"Origin\\s*===\\s*['\"]\\*['\"]","severity":"medium","cwe":"CWE-942","message":"Origin check accepts '*' (permissive CORS)","langs":["js","ts"]},
+
+  {"id":"gha-pull-request-target","pattern":"pull_request_target","severity":"medium","cwe":"CWE-285","message":"pull_request_target trigger runs with secrets — dangerous with PR checkout (supply-chain attack vector)","langs":["yaml"]},
+  {"id":"gha-write-all-permissions","pattern":"permissions\\s*:\\s*write-all","severity":"high","cwe":"CWE-732","message":"permissions: write-all grants every scope (principle of least violation)","langs":["yaml"]},
+  {"id":"gha-secrets-in-run","pattern":"run\\s*:.*secrets\\.","severity":"high","cwe":"CWE-532","message":"secrets referenced in a run step may leak in logs (set echo=false or use env)","langs":["yaml"]},
+  {"id":"gha-continue-on-error","pattern":"continue-on-error\\s*:\\s*true","severity":"low","cwe":"CWE-754","message":"continue-on-error masks step failures (may hide security scan results)","langs":["yaml"]},
+  {"id":"gha-pr-event-in-script","pattern":"github\\.event\\.pull_request","severity":"medium","cwe":"CWE-94","message":"PR event data used in script (script injection via PR title/body/label)","langs":["yaml"]},
+
+  {"id":"py-requirements-unpinned","pattern":"^[a-zA-Z][a-zA-Z0-9_.-]+$","severity":"medium","cwe":"CWE-1104","message":"unpinned dependency in requirements.txt (no version specifier)","langs":["requirements"]},
+  {"id":"npm-caret-dep","pattern":"\"\\^[0-9]","severity":"low","cwe":"CWE-1104","message":"caret (^) allows minor version upgrades (unpinned)","langs":["json"]},
+  {"id":"npm-tilde-dep","pattern":"\"~[0-9]","severity":"low","cwe":"CWE-1104","message":"tilde (~) allows patch upgrades (unpinned)","langs":["json"]},
+  {"id":"cargo-star-dep","pattern":"version\\s*=\\s*\"\\*\"","severity":"high","cwe":"CWE-1104","message":"wildcard dependency version in Cargo.toml (any version)","langs":["toml"]},
+  {"id":"gemfile-unpinned","pattern":"gem\\s+[\"'][a-zA-Z][^\"']+[\"']\\s*$","severity":"medium","cwe":"CWE-1104","message":"unpinned gem in Gemfile (no version specifier)","langs":["gemfile"]},
+  {"id":"config-properties-secret","pattern":"(password|secret|token|api[._-]?key)\\s*=\\s*[^\\s]","severity":"high","cwe":"CWE-798","message":"hardcoded secret in .properties file","langs":["properties"]},
+  {"id":"config-toml-secret","pattern":"(password|secret|token|api[._-]?key)\\s*=\\s*[\"'][^\"']+[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in TOML config","langs":["toml"]},
+  {"id":"config-ini-secret","pattern":"(password|secret|token|api[._-]?key)\\s*=\\s*[^\\s]","severity":"high","cwe":"CWE-798","message":"hardcoded secret in INI/config file","langs":["ini"]},
+  {"id":"npm-no-audit","pattern":"--no-audit","severity":"low","cwe":"CWE-1104","message":"npm --no-audit disables vulnerability checks","langs":["sh","yaml"]},
+
+  {"id":"py-jwt-none-alg","pattern":"algorithms.*[\"']none[\"']","severity":"critical","cwe":"CWE-327","message":"JWT with 'none' algorithm — no signature verification (auth bypass)","langs":["py"]},
+  {"id":"js-jwt-none-alg","pattern":"algorithms.*[\"']none[\"']","severity":"critical","cwe":"CWE-327","message":"JWT with 'none' algorithm — no signature verification (auth bypass)","langs":["js","ts"]},
+  {"id":"go-jwt-none","pattern":"jwt\\.SigningMethodNone","severity":"critical","cwe":"CWE-327","message":"JWT with SigningMethodNone — no signature verification (auth bypass)","langs":["go"]},
+  {"id":"java-jwt-none","pattern":"Algorithm\\.none\\(\\)","severity":"critical","cwe":"CWE-327","message":"JWT with Algorithm.none() — no signature verification (auth bypass)","langs":["java","kotlin"]},
+  {"id":"py-unsalted-hash","pattern":"hashlib\\.(md5|sha1|sha256)\\(.*password","severity":"high","cwe":"CWE-916","message":"unsalted password hash (use bcrypt/argon2 with a salt)","langs":["py"]},
+  {"id":"py-bcrypt-low-rounds","pattern":"gensalt\\s*\\(\\s*[0-9]\\s*\\)","severity":"medium","cwe":"CWE-916","message":"bcrypt gensalt with low cost factor (<10 rounds — use 12+)","langs":["py"]},
+  {"id":"hardcoded-jwt-secret","pattern":"(JWT|jwt)[_A-Za-z]*(secret|SECRET|key|KEY)\\s*[:=]\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded JWT secret in source","langs":["py","js","ts","go","java","kotlin","rb","php"]},
+  {"id":"session-fixation","pattern":"session(.{0,10})(id|ID)\\s*[:=]\\s*req","severity":"high","cwe":"CWE-384","message":"session ID set from user input (session fixation)","langs":["js","ts","py"]},
+  {"id":"py-passlib-plaintext","pattern":"use_scheme\\s*\\(\\s*[\"']plaintext","severity":"high","cwe":"CWE-916","message":"passlib using plaintext password scheme (no hashing)","langs":["py"]},
+  {"id":"weak-password-length","pattern":"(minLength|min_length|MIN_LENGTH)\\s*[:=]\\s*[0-7]([^0-9]|$)","severity":"medium","cwe":"CWE-521","message":"password minimum length < 8 (weak password policy)","langs":["js","ts","py","java","kotlin"]},
+  {"id":"py-random-secret","pattern":"(secret.*random\\.(choice|randint|random)|random\\.(choice|randint|random)\\(.*secret)","severity":"high","cwe":"CWE-330","message":"using random (not secrets) for secret generation (predictable)","langs":["py"]},
+  {"id":"js-math-random-secret","pattern":"Math\\.random\\(\\).*secret","severity":"high","cwe":"CWE-330","message":"Math.random for secret generation (not cryptographically secure)","langs":["js","ts"]},
+  {"id":"go-math-rand-secret","pattern":"(rand|mathrand)\\.(Intn|Int|Read|Float64|Float32|New|NewSource)\\(.*secret|secret.*(rand|mathrand)\\.(Intn|Int|Read|Float64|Float32|New|NewSource)","severity":"high","cwe":"CWE-330","message":"math/rand for secret generation (not cryptographically secure — use crypto/rand)","langs":["go"]},
+  {"id":"py-insecure-pickle-protocol","pattern":"pickle\\.dumps\\s*\\(.*protocol\\s*=\\s*[0-4]","severity":"low","cwe":"CWE-502","message":"pickle with old protocol version (may have known vulnerabilities)","langs":["py"]}
 ]

@@ -1,0 +1,3 @@
+[database]
+password = "hardcodedpass123"
+secret_key = "mysecretkey456"

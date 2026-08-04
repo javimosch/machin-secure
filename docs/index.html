@@ -60,7 +60,7 @@
 </head>
 <body>
 <header><div class="wrap">
-  <div class="badge">v1.2.0 · 119 rules · 17 languages · SARIF 2.1.0</div>
+  <div class="badge">v1.3.0 · 147 rules · 24 languages · SARIF 2.1.0</div>
   <h1>machin-secure</h1>
   <p class="tag">A security auditor where the tool owns <b>no model</b> — the calling agent <i>is</i> the LLM.<br>
     Single ~88&nbsp;KB binary. Deterministic regex rules. Agent-managed verdicts. CI-native.</p>
@@ -126,22 +126,24 @@
 </section>
 
 <section id="rules">
-  <h2>119 CWE-tagged detections across 17 languages</h2>
+  <h2>147 CWE-tagged detections across 24 languages</h2>
   <p class="lead"><code>rules.json</code> is plain data, read fresh from disk every run — extend it without recompiling. The rule pack is the actual product; the engine is interchangeable.</p>
   <div class="grid">
-    <div class="card"><h3>Secrets</h3><p><span class="sev crit">CWE-798</span> AWS, Google, Slack, GitHub PAT, Stripe, JWT, private keys, generic high-entropy, connection strings with embedded creds.</p></div>
+    <div class="card"><h3>Secrets</h3><p><span class="sev crit">CWE-798</span> AWS, Google, Slack, GitHub PAT, Stripe, JWT, private keys, generic high-entropy, connection strings, config files (.properties, TOML, INI), hardcoded JWT secrets.</p></div>
     <div class="card"><h3>Injection</h3><p><span class="sev high">CWE-78/89/95</span> command injection (shell=True, eval, exec, os.system, Runtime.exec, Command::new), SQL injection (string concat, f-strings, template interp).</p></div>
     <div class="card"><h3>Deserialization</h3><p><span class="sev high">CWE-502</span> pickle, yaml.load, ObjectInputStream, PHP unserialize, Ruby YAML.load.</p></div>
     <div class="card"><h3>XSS / SSRF / XXE</h3><p><span class="sev med">CWE-79/918/611</span> dangerouslySetInnerHTML, innerHTML, document.write, template.HTML, HTTP concat URLs, XML external entities.</p></div>
-    <div class="card"><h3>Weak crypto / TLS</h3><p><span class="sev med">CWE-327/295</span> MD5, SHA-1, DES, InsecureSkipVerify, rejectUnauthorized:false, verify=False, trust-all certs, weak TLS versions (SSLv3/TLS 1.0/1.1).</p></div>
+    <div class="card"><h3>Weak crypto / TLS</h3><p><span class="sev med">CWE-327/295</span> MD5, SHA-1, DES, InsecureSkipVerify, rejectUnauthorized:false, verify=False, trust-all certs, weak TLS versions, JWT alg:none (critical).</p></div>
     <div class="card"><h3>Memory safety</h3><p><span class="sev high">CWE-120/242</span> strcpy, strcat, sprintf, gets, Rust unsafe blocks.</p></div>
     <div class="card"><h3>IaC / cloud</h3><p><span class="sev high">CWE-732/668/311</span> Terraform (public S3, 0.0.0.0/0 SGs, unencrypted RDS), Kubernetes (privileged, runAsUser:0, hostPath, hostNetwork, :latest), Docker (ADD URL, :latest, apt-get upgrade, COPY . .).</p></div>
     <div class="card"><h3>Frameworks</h3><p><span class="sev high">CWE-352/489</span> Django (ALLOWED_HOSTS=*, @csrf_exempt, SECURE_SSL_REDIRECT=False), Flask (debug=True RCE, hardcoded secret_key), FastAPI (CORS *), Spring (actuator exposed), Express (no body limit).</p></div>
+    <div class="card"><h3>CI/CD pipeline</h3><p><span class="sev high">CWE-285/532/94</span> pull_request_target with secrets, write-all permissions, secrets in run steps, PR event data in scripts (script injection), continue-on-error masking scans.</p></div>
+    <div class="card"><h3>Dep / config hardening</h3><p><span class="sev high">CWE-1104/798</span> unpinned deps (requirements.txt, package.json ^/~, Cargo.toml *, Gemfile), config file secrets (.properties, TOML, INI), npm --no-audit.</p></div>
+    <div class="card"><h3>Auth / session</h3><p><span class="sev crit">CWE-327/916/384</span> JWT alg:none (4 languages), unsalted password hashes, bcrypt low rounds, session fixation, plaintext password scheme, weak password length, non-crypto random for secrets.</p></div>
     <div class="card"><h3>Web / API</h3><p><span class="sev med">CWE-942/601/352</span> CORS wildcard, open redirect, CSRF, SameSite=None, mass assignment, log injection, ReDoS, info exposure via tracebacks.</p></div>
-    <div class="card"><h3>Path traversal</h3><p><span class="sev med">CWE-22</span> open() with .., fs read with interpolated path.</p></div>
   </div>
   <p style="margin-top:14px">
-    <span class="lang">Python</span><span class="lang">JS/TS</span><span class="lang">Vue</span><span class="lang">Go</span><span class="lang">Rust</span><span class="lang">C/C++</span><span class="lang">C#</span><span class="lang">Java/Kotlin</span><span class="lang">Ruby</span><span class="lang">Shell</span><span class="lang">Swift</span><span class="lang">PHP</span><span class="lang">YAML</span><span class="lang">Terraform</span><span class="lang">Dockerfile</span><span class="lang">XML</span><span class="lang">JSON</span>
+    <span class="lang">Python</span><span class="lang">JS/TS</span><span class="lang">Vue</span><span class="lang">Go</span><span class="lang">Rust</span><span class="lang">C/C++</span><span class="lang">C#</span><span class="lang">Java/Kotlin</span><span class="lang">Ruby</span><span class="lang">Shell</span><span class="lang">Swift</span><span class="lang">PHP</span><span class="lang">YAML</span><span class="lang">Terraform</span><span class="lang">Dockerfile</span><span class="lang">XML</span><span class="lang">TOML</span><span class="lang">.properties</span><span class="lang">INI</span><span class="lang">requirements.txt</span><span class="lang">Gemfile</span><span class="lang">JSON</span>
   </p>
 </section>
 

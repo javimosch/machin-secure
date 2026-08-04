@@ -119,13 +119,14 @@ the tool returns structured data, the operator's own LLM does the reasoning.
 
 ## Rules
 
-`rules.json` — 119 CWE-tagged detections (secrets, command injection,
+`rules.json` — 147 CWE-tagged detections (secrets, command injection,
 deserialization, XSS, weak crypto, TLS bypass, SQL injection, path traversal,
 hardcoded credentials, SSRF, XXE, CORS, open redirect, buffer overflow, CSRF,
-mass assignment, ReDoS, log injection, IaC misconfigurations) across Python,
+mass assignment, ReDoS, log injection, IaC misconfigurations, CI/CD pipeline
+security, dependency/config hardening, auth/session security) across Python,
 JS/TS/Vue, Go, Rust, C/C++, C#, Java/Kotlin, Ruby, Shell, Swift, PHP, YAML,
-Terraform, Dockerfiles, XML. It's plain data, read fresh from disk every run —
-extend it without recompiling.
+Terraform, Dockerfiles, XML, TOML, .properties, INI, requirements.txt, Gemfile.
+It's plain data, read fresh from disk every run — extend it without recompiling.
 
 ## Verified against
 
