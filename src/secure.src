@@ -1,0 +1,367 @@
+// machin-secure — KISS security auditor for agent-first use.
+// Deterministic regex rules over a filesystem walk. No LLM, no Docker, no agents.
+// Output: JSONL findings on stdout (one per line). Exit 2 if high/critical, else 0.
+// --hart: publish a self-contained HTML report to https://hart.intrane.fr.
+
+type Rule struct {
+	id       string
+	pattern  string
+	severity string
+	cwe      string
+	message  string
+	langs    []string
+}
+
+type Finding struct {
+	rule     string
+	file     string
+	line     int
+	severity string
+	cwe      string
+	message  string
+	snippet  string
+}
+
+type Run struct {
+	target   string
+	started  int
+	findings []Finding
+	scanned  int
+	skipped  int
+	rules_n  int
+}
+
+// global run state (structs are pass-by-value in MFL; a global avoids copying)
+var run = Run{findings: []Finding{}}
+
+// ---- helpers ----
+
+func last_index(s, sub) (n) {
+	n = -1
+	j := 0
+	for j < len(s)-len(sub)+1 {
+		if substr(s, j, j+len(sub)) == sub { n = j }
+		j = j + 1
+	}
+}
+
+func strip_quotes(s) (out) {
+	out = s
+	if len(out) >= 2 && substr(out, 0, 1) == "\"" && substr(out, len(out)-1, len(out)) == "\"" {
+		out = substr(out, 1, len(out)-1)
+	}
+}
+
+func html_escape(s) (out) {
+	out = s
+	out = replace(out, "&", "&amp;")
+	out = replace(out, "<", "&lt;")
+	out = replace(out, ">", "&gt;")
+	out = replace(out, "\"", "&quot;")
+}
+
+// ---- lang detection by extension ----
+
+func lang_of(path) (lang) {
+	lang = ""
+	bi := last_index(path, "/")
+	base := substr(path, bi+1, len(path))
+	// Dockerfile (no extension)
+	if base == "Dockerfile" || has_prefix(base, "Dockerfile.") { lang = "dockerfile" ; return }
+	if has_prefix(base, ".env") { lang = "env" ; return }
+	i := last_index(path, ".")
+	if i < 0 { return }
+	ext := substr(path, i+1, len(path))
+	if ext == "py" { lang = "py" ; return }
+	if ext == "js" || ext == "cjs" || ext == "mjs" { lang = "js" ; return }
+	if ext == "ts" { lang = "ts" ; return }
+	if ext == "tsx" { lang = "tsx" ; return }
+	if ext == "jsx" { lang = "jsx" ; return }
+	if ext == "vue" { lang = "vue" ; return }
+	if ext == "go" { lang = "go" ; return }
+	if ext == "php" { lang = "php" ; return }
+	if ext == "rb" { lang = "rb" ; return }
+	if ext == "java" { lang = "java" ; return }
+	if ext == "sh" { lang = "sh" ; return }
+	if ext == "yml" || ext == "yaml" { lang = "yaml" ; return }
+	if ext == "json" { lang = "json" ; return }
+	if ext == "md" { lang = "md" ; return }
+}
+
+// ---- dir skip list ----
+
+func should_skip_dir(name) (b) {
+	b = false
+	skip := []string{".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "coverage", ".next", ".nuxt", ".cache", "vendor", ".idea", ".vscode", "target", "deps", ".hg", ".svn"}
+	for _, s := range skip {
+		if s == name { b = true ; return }
+	}
+}
+
+// ---- rule loading ----
+
+func load_rules(path) (rules) {
+	rules = []Rule{}
+	s := read_file(path)
+	if len(s) == 0 { return }
+	rules = parse(s, []Rule{})
+}
+
+// ---- rule applies to lang? ----
+
+func rule_applies(rule, lang) (b) {
+	b = false
+	for _, rl := range rule.langs {
+		if rl == "*" { b = true ; return }
+		if rl == lang { b = true ; return }
+	}
+}
+
+// ---- file scan ----
+
+// pre-filter rules to those applicable to a lang (called once per file, not per line)
+func rules_for_lang(rules, lang) (out) {
+	out = []Rule{}
+	for _, rule := range rules {
+		if rule_applies(rule, lang) { out = append(out, rule) }
+	}
+}
+
+func scan_file(path, lang, rules) {
+	run.scanned = run.scanned + 1
+	src := read_file(path)
+	if len(src) == 0 { return }
+	if len(src) > 1000000 { run.skipped = run.skipped + 1 ; return }
+	applicable := rules_for_lang(rules, lang)
+	if len(applicable) == 0 { return }
+	lines := split(src, "\n")
+	for i, line := range lines {
+		for _, rule := range applicable {
+			if regex_match(line, rule.pattern) {
+				snip := line
+				if len(snip) > 200 { snip = substr(snip, 0, 200) + "..." }
+				f := Finding{
+					rule:     rule.id,
+					file:     path,
+					line:     i + 1,
+					severity: rule.severity,
+					cwe:      rule.cwe,
+					message:  rule.message,
+					snippet:  trim(snip),
+				}
+				run.findings = append(run.findings, f)
+			}
+		}
+	}
+}
+
+// ---- recursive walk ----
+
+func walk(dir, rules, depth) {
+	if depth > 25 { return }
+	entries := list_dir(dir)
+	for _, name := range entries {
+		full := dir + "/" + name
+		k, size, _ := stat(full)
+		if k == 2 {
+			if should_skip_dir(name) { continue }
+			walk(full, rules, depth+1)
+		} else if k == 1 {
+			if size > 1000000 { run.skipped = run.skipped + 1 ; continue }
+			lang := lang_of(full)
+			if lang == "" { continue }
+			scan_file(full, lang, rules)
+		}
+	}
+}
+
+// ---- output ----
+
+func emit_jsonl() {
+	for _, f := range run.findings {
+		println(json(f))
+	}
+}
+
+func emit_summary() {
+	crit := 0 ; high := 0 ; med := 0 ; low := 0
+	for _, f := range run.findings {
+		if f.severity == "critical" { crit = crit + 1 }
+		if f.severity == "high" { high = high + 1 }
+		if f.severity == "medium" { med = med + 1 }
+		if f.severity == "low" { low = low + 1 }
+	}
+	m := make(map[string]int)
+	m["critical"] = crit
+	m["high"] = high
+	m["medium"] = med
+	m["low"] = low
+	m["total"] = crit + high + med + low
+	m["scanned"] = run.scanned
+	m["skipped"] = run.skipped
+	m["rules"] = run.rules_n
+	println(json(m))
+}
+
+// ---- hart report (opt-in) ----
+
+func hart_report(owner, artifact) (url) {
+	url = ""
+	crit := 0 ; high := 0 ; med := 0 ; low := 0
+	for _, f := range run.findings {
+		if f.severity == "critical" { crit = crit + 1 }
+		if f.severity == "high" { high = high + 1 }
+		if f.severity == "medium" { med = med + 1 }
+		if f.severity == "low" { low = low + 1 }
+	}
+	total := crit + high + med + low
+	h := "<!doctype html><html><head><meta charset=utf-8>"
+	h = h + "<meta name=title content=\"machin-secure report\">"
+	h = h + "<meta name=description content=\"Security audit findings for " + run.target + " — " + str(total) + " findings\">"
+	h = h + "<title>machin-secure — " + run.target + "</title>"
+	h = h + "<style>"
+	h = h + "body{font:14px/1.5 ui-monospace,Consolas,monospace;background:#0a0a0a;color:#d4d4d4;margin:0;padding:24px}"
+	h = h + "h1{font-size:18px;border-bottom:1px solid #333;padding-bottom:8px}"
+	h = h + ".meta{color:#888;font-size:12px;margin-bottom:16px}"
+	h = h + ".sev{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:bold;margin-right:6px}"
+	h = h + ".critical{background:#7f1d1d;color:#fecaca}.high{background:#78350f;color:#fed7aa}"
+	h = h + ".medium{background:#365314;color:#d9f99d}.low{background:#1e3a8a;color:#bfdbfe}"
+	h = h + "table{width:100%;border-collapse:collapse}"
+	h = h + "th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #222;vertical-align:top}"
+	h = h + "th{color:#888;font-size:11px;text-transform:uppercase}"
+	h = h + "td.loc{color:#888;white-space:nowrap}"
+	h = h + "td.snip{color:#aaa;max-width:600px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+	h = h + ".summary{margin:16px 0;padding:12px;background:#111;border:1px solid #222;border-radius:4px}"
+	h = h + ".summary span{margin-right:16px}"
+	h = h + "</style></head><body>"
+	h = h + "<h1>machin-secure audit</h1>"
+	h = h + "<div class=meta>target: <b>" + run.target + "</b> &middot; " + str(run.scanned) + " files scanned &middot; " + str(run.rules_n) + " rules</div>"
+	h = h + "<div class=summary><span class=sev critical>critical " + str(crit) + "</span>"
+	h = h + "<span class=sev high>high " + str(high) + "</span>"
+	h = h + "<span class=sev medium>medium " + str(med) + "</span>"
+	h = h + "<span class=sev low>low " + str(low) + "</span></div>"
+	if total == 0 {
+		h = h + "<p>No findings.</p>"
+	} else {
+		h = h + "<table><thead><tr><th>sev</th><th>rule</th><th>file:line</th><th>message</th><th>snippet</th></tr></thead><tbody>"
+		for _, f := range run.findings {
+			h = h + "<tr><td><span class=sev " + f.severity + ">" + f.severity + "</span></td>"
+			h = h + "<td>" + f.rule + "</td>"
+			h = h + "<td class=loc>" + f.file + ":" + str(f.line) + "</td>"
+			h = h + "<td>" + f.message + "</td>"
+			h = h + "<td class=snip>" + html_escape(f.snippet) + "</td></tr>"
+		}
+		h = h + "</tbody></table>"
+	}
+	h = h + "</body></html>"
+
+	tmp := "/tmp/machin-secure-" + str(now_ms()) + ".html"
+	write_file(tmp, h)
+	// publish via hart binary; fall back to curl. Export HART_URL explicitly since
+	// the spawned shell may not source the user's env/config the same way an
+	// interactive shell does.
+	hart_url := env("HART_URL")
+	if hart_url == "" { hart_url = "https://hart.intrane.fr" }
+	cmd := "HART_URL=" + hart_url + " hart publish " + tmp + " --owner " + owner + " --artifact " + artifact + " --visibility unlisted"
+	code, out, _ := exec(cmd)
+	if code == 0 {
+		u, e := json_get(out, ".url")
+		if e == "" { url = strip_quotes(u) }
+	} else {
+		c2, o2, _ := exec("curl -s -X POST '" + hart_url + "/v1/publish?owner=" + owner + "&artifact=" + artifact + "&visibility=unlisted' -H 'content-type: text/html' --data-binary @" + tmp)
+		if c2 == 0 {
+			u, e := json_get(o2, ".url")
+			if e == "" { url = strip_quotes(u) }
+		}
+	}
+}
+
+// ---- arg parsing ----
+
+func main() {
+	a := args()
+	target := ""
+	rules_path := "rules.json"
+	want_hart := false
+	want_summary := false
+	hart_owner := "machin-secure"
+	hart_artifact := "audit"
+	help := false
+
+	i := 1
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--target" { i = i + 1 ; if i < len(a) { target = a[i] } }
+		if arg == "--rules" { i = i + 1 ; if i < len(a) { rules_path = a[i] } }
+		if arg == "--hart" { want_hart = true }
+		if arg == "--summary" { want_summary = true }
+		if arg == "--hart-owner" { i = i + 1 ; if i < len(a) { hart_owner = a[i] } }
+		if arg == "--hart-artifact" { i = i + 1 ; if i < len(a) { hart_artifact = a[i] } }
+		if arg == "--help" || arg == "-h" { help = true }
+		if has_prefix(arg, "-") == false && target == "" && i > 0 { target = arg }
+		i = i + 1
+	}
+
+	if help {
+		println("machin-secure — KISS security auditor (agent-first, JSONL output)")
+		println("")
+		println("usage: secure [OPTIONS] [TARGET]")
+		println("")
+		println("options:")
+		println("  --target PATH        directory or file to scan (default: current dir)")
+		println("  --rules PATH         rules.json (default: ./rules.json)")
+		println("  --summary            print only a summary JSON object, no per-finding lines")
+		println("  --hart               publish an HTML report to https://hart.intrane.fr")
+		println("  --hart-owner NAME    hart owner namespace (default: machin-secure)")
+		println("  --hart-artifact NAME hart artifact slug (default: audit)")
+		println("  --help, -h           this help")
+		println("")
+		println("output: one JSON finding per line on stdout (JSONL).")
+		println("exit:   0 = clean, 1 = error, 2 = high/critical findings present")
+		return
+	}
+
+	if target == "" { target = "." }
+
+	rules := load_rules(rules_path)
+	if len(rules) == 0 {
+		println("{\"error\":\"no rules loaded from " + rules_path + "\"}")
+		exit(1)
+	}
+
+	run.target = target
+	run.started = now_ms()
+	run.rules_n = len(rules)
+
+	k, _, _ := stat(target)
+	if k == 1 {
+		lang := lang_of(target)
+		if lang != "" { scan_file(target, lang, rules) }
+	} else if k == 2 {
+		walk(target, rules, 0)
+	} else {
+		println("{\"error\":\"target not found: " + target + "\"}")
+		exit(1)
+	}
+
+	if want_summary {
+		emit_summary()
+	} else {
+		emit_jsonl()
+	}
+
+	if want_hart {
+		art := hart_artifact + "-" + str(now_ms())
+		url := hart_report(hart_owner, art)
+		if url != "" {
+			println("{\"hart_url\":\"" + url + "\"}")
+		}
+	}
+
+	has_high := false
+	for _, f := range run.findings {
+		if f.severity == "critical" || f.severity == "high" { has_high = true }
+	}
+	if has_high { exit(2) }
+	exit(0)
+}

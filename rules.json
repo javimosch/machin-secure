@@ -1,0 +1,57 @@
+[
+  {"id":"secret-aws-access-key","pattern":"AKIA[0-9A-Z]{16}","severity":"critical","cwe":"CWE-798","message":"AWS access key id exposed","langs":["*"]},
+  {"id":"secret-aws-secret","pattern":"aws_secret_access_key\\s*[:=]","severity":"critical","cwe":"CWE-798","message":"AWS secret access key in config","langs":["*"]},
+  {"id":"secret-google-api","pattern":"AIza[0-9A-Za-z_\\-]{35}","severity":"high","cwe":"CWE-798","message":"Google API key exposed","langs":["*"]},
+  {"id":"secret-slack-token","pattern":"xox[baprs]-[0-9A-Za-z-]{10,}","severity":"high","cwe":"CWE-798","message":"Slack token exposed","langs":["*"]},
+  {"id":"secret-github-pat","pattern":"gh[pousr]_[0-9A-Za-z]{36}","severity":"critical","cwe":"CWE-798","message":"GitHub personal access token exposed","langs":["*"]},
+  {"id":"secret-generic-high-entropy","pattern":"-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----","severity":"critical","cwe":"CWE-798","message":"Private key material in source","langs":["*"]},
+  {"id":"secret-jwt","pattern":"eyJ[A-Za-z0-9_\\-]{10,}\\.eyJ[A-Za-z0-9_\\-]{10,}\\.[A-Za-z0-9_\\-]{10,}","severity":"high","cwe":"CWE-798","message":"Hardcoded JWT token","langs":["*"]},
+  {"id":"secret-stripe","pattern":"sk_(live|test)_[0-9a-zA-Z]{24}","severity":"critical","cwe":"CWE-798","message":"Stripe secret key exposed","langs":["*"]},
+
+  {"id":"py-shell-true","pattern":"shell\\s*=\\s*True","severity":"high","cwe":"CWE-78","message":"subprocess with shell=True enables command injection","langs":["py"]},
+  {"id":"py-eval","pattern":"\\beval\\s*\\(","severity":"high","cwe":"CWE-95","message":"eval() executes arbitrary code","langs":["py"]},
+  {"id":"py-exec","pattern":"\\bexec\\s*\\(","severity":"high","cwe":"CWE-95","message":"exec() executes arbitrary code","langs":["py"]},
+  {"id":"py-os-system","pattern":"os\\.system\\s*\\(","severity":"high","cwe":"CWE-78","message":"os.system() is command injection prone","langs":["py"]},
+  {"id":"py-pickle-load","pattern":"pickle\\.loads?\\s*\\(","severity":"high","cwe":"CWE-502","message":"pickle deserialization is remote code execution","langs":["py"]},
+  {"id":"py-yaml-unsafe","pattern":"yaml\\.load\\s*\\(","severity":"medium","cwe":"CWE-502","message":"yaml.load without SafeLoader is unsafe","langs":["py"]},
+  {"id":"py-md5-password","pattern":"hashlib\\.md5\\s*\\(","severity":"medium","cwe":"CWE-327","message":"md5 is broken; use bcrypt/argon2 for passwords","langs":["py"]},
+  {"id":"py-sha1-password","pattern":"hashlib\\.sha1\\s*\\(","severity":"low","cwe":"CWE-327","message":"sha1 is weak","langs":["py"]},
+  {"id":"py-verify-false","pattern":"verify\\s*=\\s*False","severity":"high","cwe":"CWE-295","message":"TLS certificate verification disabled","langs":["py"]},
+  {"id":"py-debug-true","pattern":"DEBUG\\s*=\\s*True","severity":"low","cwe":"CWE-489","message":"debug mode enabled","langs":["py"]},
+  {"id":"py-hardcoded-secret","pattern":"(SECRET_KEY|PASSWORD|API_KEY|TOKEN)\\s*[:=]\\s*[\"'][^\"']{6,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in source","langs":["py"]},
+
+  {"id":"js-eval","pattern":"\\beval\\s*\\(","severity":"high","cwe":"CWE-95","message":"eval() executes arbitrary code","langs":["js","ts","cjs","mjs","vue"]},
+  {"id":"js-child-process-exec","pattern":"child_process\\.exec\\s*\\(","severity":"high","cwe":"CWE-78","message":"child_process.exec runs a shell (command injection)","langs":["js","ts","cjs","mjs"]},
+  {"id":"js-shell-true-exec","pattern":"exec\\s*\\((?!.*\\[)(?!.*\\{)(?!.*,)(?!.*\\\\)","severity":"medium","cwe":"CWE-78","message":"exec with a string argument runs a shell","langs":["js","ts","cjs","mjs"]},
+  {"id":"js-dangerously-set-inner-html","pattern":"dangerouslySetInnerHTML","severity":"medium","cwe":"CWE-79","message":"dangerouslySetInnerHTML can cause XSS","langs":["js","ts","jsx","tsx"]},
+  {"id":"js-innerhtml-assign","pattern":"\\.innerHTML\\s*=","severity":"medium","cwe":"CWE-79","message":"innerHTML assignment can cause XSS","langs":["js","ts","vue"]},
+  {"id":"js-document-write","pattern":"document\\.write\\s*\\(","severity":"medium","cwe":"CWE-79","message":"document.write can cause XSS","langs":["js","ts","vue"]},
+  {"id":"js-verify-false","pattern":"rejectUnauthorized\\s*:\\s*false","severity":"high","cwe":"CWE-295","message":"TLS certificate verification disabled","langs":["js","ts","cjs","mjs"]},
+  {"id":"js-hardcoded-secret","pattern":"(api_key|apikey|secret|password|passwd|token)\\s*[:=]\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in source","langs":["js","ts","cjs","mjs","vue"]},
+  {"id":"js-debugger","pattern":"^\\s*debugger\\s*;?\\s*$","severity":"low","cwe":"CWE-489","message":"debugger statement left in code","langs":["js","ts","vue"]},
+  {"id":"js-console-secret","pattern":"console\\.log\\s*\\(.*(token|password|secret|apikey|api_key)","severity":"medium","cwe":"CWE-532","message":"secret logged to console","langs":["js","ts","cjs","mjs","vue"]},
+
+  {"id":"sql-string-concat","pattern":"(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\\s.*\\+\\s*[\"']?\\$","severity":"high","cwe":"CWE-89","message":"SQL query built by string concatenation (injection)","langs":["js","ts","py","php","java","go"]},
+  {"id":"sql-fstring","pattern":"(SELECT|INSERT|UPDATE|DELETE)\\s.*f[\"']","severity":"high","cwe":"CWE-89","message":"SQL query built with f-string (injection)","langs":["py"]},
+  {"id":"sql-template-interp","pattern":"(SELECT|INSERT|UPDATE|DELETE)\\s.*`\\$\\{","severity":"high","cwe":"CWE-89","message":"SQL query built with template interpolation (injection)","langs":["js","ts"]},
+
+  {"id":"path-traversal-concat","pattern":"open\\s*\\(.*\\+\\s*[\"']?\\.\\.","severity":"medium","cwe":"CWE-22","message":"path traversal via concatenation with ..","langs":["py"]},
+  {"id":"path-traversal-fs-read","pattern":"fs\\.read(File|FileSync)\\s*\\(.*\\$\\{","severity":"medium","cwe":"CWE-22","message":"fs read with interpolated path (traversal risk)","langs":["js","ts"]},
+
+  {"id":"cookie-missing-httponly","pattern":"Set-Cookie:.*(?i:.*)(?!.*HttpOnly)","severity":"low","cwe":"CWE-1004","message":"cookie without HttpOnly","langs":["*"]},
+  {"id":"cookie-missing-secure","pattern":"res\\.cookie\\s*\\([^)]*secure\\s*:\\s*false","severity":"medium","cwe":"CWE-614","message":"cookie set without Secure flag","langs":["js","ts"]},
+
+  {"id":"config-secret-env-missing","pattern":"SECRET_KEY\\s*[:=]\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"secret hardcoded instead of read from env","langs":["py","js","ts","yml","yaml","json","env"]},
+  {"id":"docker-root-user","pattern":"^\\s*USER\\s+root","severity":"low","cwe":"CWE-250","message":"container runs as root","langs":["dockerfile","*"]},
+  {"id":"docker-add-password","pattern":"(password|passwd)\\s*[:=]","severity":"medium","cwe":"CWE-798","message":"password in container/image config","langs":["dockerfile","yml","yaml"]},
+
+  {"id":"php-exec","pattern":"\\b(exec|system|passthru|shell_exec|popen)\\s*\\(","severity":"high","cwe":"CWE-78","message":"PHP command execution function","langs":["php"]},
+  {"id":"php-eval","pattern":"\\beval\\s*\\(","severity":"high","cwe":"CWE-95","message":"PHP eval() executes arbitrary code","langs":["php"]},
+  {"id":"php-unserialize","pattern":"\\bunserialize\\s*\\(","severity":"high","cwe":"CWE-502","message":"PHP unserialize is remote code execution","langs":["php"]},
+  {"id":"php-mysql-query","pattern":"mysql_query\\s*\\(.*\\$","severity":"high","cwe":"CWE-89","message":"PHP mysql_query with variable (SQL injection)","langs":["php"]},
+
+  {"id":"go-html-template-text","pattern":"template\\.HTML\\s*\\(","severity":"medium","cwe":"CWE-79","message":"template.HTML bypasses escaping (XSS)","langs":["go"]},
+  {"id":"go-exec-command","pattern":"exec\\.Command\\s*\\(.*\\+\\s*","severity":"medium","cwe":"CWE-78","message":"exec.Command built by concatenation (injection)","langs":["go"]},
+
+  {"id":"env-hardcoded-url","pattern":"(mongodb|postgres|mysql|redis)://[^\\s\"']+:[^\\s\"']+@","severity":"high","cwe":"CWE-798","message":"connection string with embedded credentials","langs":["*"]}
+]
