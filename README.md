@@ -115,11 +115,12 @@ the tool returns structured data, the operator's own LLM does the reasoning.
 
 ## Rules
 
-`rules.json` — 46 CWE-tagged detections (secrets, command injection,
+`rules.json` — 84 CWE-tagged detections (secrets, command injection,
 deserialization, XSS, weak crypto, TLS bypass, SQL injection, path traversal,
-hardcoded credentials) across Python, JS/TS/Vue, Go, PHP, Ruby, Java, YAML,
-Dockerfiles. It's plain data, read fresh from disk every run — extend it
-without recompiling.
+hardcoded credentials, SSRF, XXE, CORS, open redirect, buffer overflow) across
+Python, JS/TS/Vue, Go, Rust, C/C++, C#, Java/Kotlin, Ruby, Shell, Swift, PHP,
+YAML, Dockerfiles, XML. It's plain data, read fresh from disk every run —
+extend it without recompiling.
 
 ## Verified against
 

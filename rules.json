@@ -53,5 +53,52 @@
   {"id":"go-html-template-text","pattern":"template\\.HTML\\s*\\(","severity":"medium","cwe":"CWE-79","message":"template.HTML bypasses escaping (XSS)","langs":["go"]},
   {"id":"go-exec-command","pattern":"exec\\.Command\\s*\\(.*\\+\\s*","severity":"medium","cwe":"CWE-78","message":"exec.Command built by concatenation (injection)","langs":["go"]},
 
-  {"id":"env-hardcoded-url","pattern":"(mongodb|postgres|mysql|redis)://[^\\s\"']+:[^\\s\"']+@","severity":"high","cwe":"CWE-798","message":"connection string with embedded credentials","langs":["*"]}
+  {"id":"env-hardcoded-url","pattern":"(mongodb|postgres|mysql|redis)://[^\\s\"']+:[^\\s\"']+@","severity":"high","cwe":"CWE-798","message":"connection string with embedded credentials","langs":["*"]},
+
+  {"id":"go-sql-concat","pattern":"(Query|Exec|QueryRow)\\s*\\(.*\\+","severity":"high","cwe":"CWE-89","message":"SQL query built by string concatenation (injection)","langs":["go"]},
+  {"id":"go-insecure-skip-verify","pattern":"InsecureSkipVerify\\s*:\\s*true","severity":"high","cwe":"CWE-295","message":"TLS certificate verification disabled (InsecureSkipVerify)","langs":["go"]},
+  {"id":"go-md5","pattern":"md5\\.New\\s*\\(","severity":"medium","cwe":"CWE-327","message":"md5 is broken; use SHA-256 or stronger","langs":["go"]},
+  {"id":"go-des-cipher","pattern":"des\\.NewCipher\\s*\\(","severity":"medium","cwe":"CWE-327","message":"DES is a weak cipher (56-bit key)","langs":["go"]},
+  {"id":"go-http-concat-url","pattern":"http\\.(Get|Post|Head)\\s*\\(.*\\+","severity":"medium","cwe":"CWE-918","message":"HTTP request URL built by concatenation (SSRF risk)","langs":["go"]},
+  {"id":"go-hardcoded-secret","pattern":"(secret|password|token|apikey)\\s*[:=]\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in source","langs":["go"]},
+
+  {"id":"rust-unsafe-block","pattern":"\\bunsafe\\s*\\{","severity":"low","cwe":"CWE-733","message":"unsafe block bypasses Rust memory safety — review carefully","langs":["rust"]},
+  {"id":"rust-command-format","pattern":"Command::new\\s*\\(.*format!","severity":"high","cwe":"CWE-78","message":"Command::new built with format! (command injection)","langs":["rust"]},
+  {"id":"rust-command-arg-format","pattern":"\\.arg\\s*\\(.*format!","severity":"high","cwe":"CWE-78","message":"Command arg built with format! (command injection)","langs":["rust"]},
+
+  {"id":"java-runtime-exec","pattern":"Runtime\\.getRuntime\\(\\)\\.exec\\s*\\(","severity":"high","cwe":"CWE-78","message":"Runtime.exec runs a command (command injection risk)","langs":["java","kotlin"]},
+  {"id":"java-processbuilder","pattern":"new\\s+ProcessBuilder\\s*\\(","severity":"medium","cwe":"CWE-78","message":"ProcessBuilder runs an external command — review input source","langs":["java","kotlin"]},
+  {"id":"java-objectinputstream","pattern":"ObjectInputStream\\s*\\(","severity":"high","cwe":"CWE-502","message":"ObjectInputStream deserialization is remote code execution","langs":["java","kotlin"]},
+  {"id":"java-statement-execute-concat","pattern":"(executeQuery|executeUpdate|createStatement)\\s*\\(.*\\+","severity":"high","cwe":"CWE-89","message":"SQL query built by string concatenation (injection)","langs":["java","kotlin"]},
+  {"id":"java-md5","pattern":"MessageDigest\\.getInstance\\s*\\(\\s*[\"']MD5","severity":"medium","cwe":"CWE-327","message":"MD5 is broken; use SHA-256 or stronger","langs":["java","kotlin"]},
+  {"id":"java-sha1","pattern":"MessageDigest\\.getInstance\\s*\\(\\s*[\"']SHA-?1","severity":"low","cwe":"CWE-327","message":"SHA-1 is weak","langs":["java","kotlin"]},
+  {"id":"java-trust-all-certs","pattern":"TrustAll[Cc]ert","severity":"high","cwe":"CWE-295","message":"trust-all certificate verifier disables TLS checks","langs":["java","kotlin"]},
+  {"id":"java-xxe","pattern":"(DocumentBuilderFactory|SAXParserFactory)\\.newInstance","severity":"low","cwe":"CWE-611","message":"XML parser — verify external entities are disabled (XXE)","langs":["java","kotlin"]},
+  {"id":"java-hardcoded-secret","pattern":"(password|secret|token|apiKey|apikey)\\s*[:=]\\s*[\"'][^\"']{8,}[\"']","severity":"high","cwe":"CWE-798","message":"hardcoded secret in source","langs":["java","kotlin"]},
+
+  {"id":"rb-system-interp","pattern":"\\bsystem\\s*\\(.*#\\{","severity":"high","cwe":"CWE-78","message":"system() with string interpolation (command injection)","langs":["rb"]},
+  {"id":"rb-eval","pattern":"\\beval\\s*\\(","severity":"high","cwe":"CWE-95","message":"eval() executes arbitrary code","langs":["rb"]},
+  {"id":"rb-open3","pattern":"Open3\\.(capture[0-9]*|popen[0-9]*|spawn)\\s*\\(","severity":"medium","cwe":"CWE-78","message":"Open3 runs an external command — review input source","langs":["rb"]},
+  {"id":"rb-activerecord-sql","pattern":"\\.where\\s*\\([\"'].*#\\{","severity":"high","cwe":"CWE-89","message":"ActiveRecord .where with interpolation (SQL injection)","langs":["rb"]},
+  {"id":"rb-yaml-load","pattern":"YAML\\.load\\s*\\(","severity":"medium","cwe":"CWE-502","message":"YAML.load is unsafe (use safe_load / permitted classes)","langs":["rb"]},
+
+  {"id":"sh-eval-var","pattern":"\\beval\\s+\\$","severity":"high","cwe":"CWE-95","message":"eval of a variable executes arbitrary code","langs":["sh"]},
+  {"id":"sh-curl-pipe-sh","pattern":"(curl|wget)\\s+[^|]*\\|\\s*(sh|bash)","severity":"high","cwe":"CWE-78","message":"piping remote content to a shell (remote code execution)","langs":["sh"]},
+  {"id":"sh-source-var","pattern":"\\bsource\\s+\\$","severity":"medium","cwe":"CWE-95","message":"sourcing a variable path (arbitrary code execution)","langs":["sh"]},
+
+  {"id":"c-strcpy","pattern":"\\bstrcpy\\s*\\(","severity":"high","cwe":"CWE-120","message":"strcpy has no bounds checking (buffer overflow)","langs":["c","cpp"]},
+  {"id":"c-strcat","pattern":"\\bstrcat\\s*\\(","severity":"medium","cwe":"CWE-120","message":"strcat has no bounds checking (buffer overflow)","langs":["c","cpp"]},
+  {"id":"c-sprintf","pattern":"\\bsprintf\\s*\\(","severity":"high","cwe":"CWE-120","message":"sprintf has no bounds checking (buffer overflow)","langs":["c","cpp"]},
+  {"id":"c-gets","pattern":"\\bgets\\s*\\(","severity":"high","cwe":"CWE-242","message":"gets() is inherently unsafe (removed from C11)","langs":["c","cpp"]},
+  {"id":"c-system","pattern":"\\bsystem\\s*\\(","severity":"high","cwe":"CWE-78","message":"system() is command injection prone","langs":["c","cpp"]},
+
+  {"id":"cs-process-start-concat","pattern":"Process\\.Start\\s*\\(.*\\+","severity":"high","cwe":"CWE-78","message":"Process.Start built by concatenation (command injection)","langs":["cs"]},
+  {"id":"cs-sql-concat","pattern":"(SqlCommand|SqlDataAdapter)\\s*\\(.*\\+","severity":"high","cwe":"CWE-89","message":"SQL command built by concatenation (injection)","langs":["cs"]},
+  {"id":"cs-md5","pattern":"MD5\\.Create\\s*\\(","severity":"medium","cwe":"CWE-327","message":"MD5 is broken; use SHA-256 or stronger","langs":["cs"]},
+
+  {"id":"swift-eval-js","pattern":"evaluateJavaScript\\s*\\(","severity":"medium","cwe":"CWE-95","message":"evaluateJavaScript runs arbitrary JS in the WebView","langs":["swift"]},
+
+  {"id":"cors-wildcard","pattern":"Access-Control-Allow-Origin.{0,20}[\"']\\*[\"']","severity":"medium","cwe":"CWE-942","message":"CORS allows all origins (permissive)","langs":["js","ts","go","php","rb","java","kotlin","yaml","yml"]},
+  {"id":"open-redirect-req","pattern":"(redirect|sendRedirect|RedirectTo)\\s*\\(.*req\\.(query|params|getParameter)","severity":"medium","cwe":"CWE-601","message":"redirect target from user input (open redirect)","langs":["js","ts","java","kotlin"]},
+  {"id":"xxe-external-entity","pattern":"<!ENTITY\\s+[^>]+\\s+SYSTEM","severity":"high","cwe":"CWE-611","message":"XML external entity declaration (XXE)","langs":["*"]}
 ]

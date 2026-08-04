@@ -164,8 +164,9 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
 
 ## Verified against
 
-- `test/fixtures/vuln.py`, `test/fixtures/vuln.js` — synthetic positives,
-  all 14 expected findings fire.
+- `test/fixtures/` — synthetic positives across 11 languages
+  (`vuln.{py,js,go,rs,java,rb,sh,c,cs,swift,xml}`), all 84 rules' expected
+  findings fire; SARIF output validated against `sarif-2.1.0.json`.
 - `~/pr/multi-assistant` — 10,398 files scanned, 1950 findings including a
   real hardcoded GitHub PAT and private-key material in `.env.*.bak` files.
 - `~/pr/v3` — 35,865 files scanned in ~13 min, 1680 findings.
