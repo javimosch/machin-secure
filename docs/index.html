@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>machin-secure — KISS agent-first security auditor</title>
-<meta name="description" content="A deterministic regex security auditor where the tool owns no model — the calling agent IS the LLM. Single ~88KB binary, 84 CWE-tagged rules across 16 languages, SARIF 2.1.0 for GitHub Code Scanning.">
+<meta name="description" content="A deterministic regex security auditor where the tool owns no model — the calling agent IS the LLM. Single ~88KB binary, 1,000 CWE-tagged rules across 25 languages, SARIF 2.1.0 for GitHub Code Scanning.">
 <meta property="og:title" content="machin-secure — the tool owns no model, the agent is the LLM">
-<meta property="og:description" content="KISS agent-first security auditor. 84 CWE-tagged rules, 16 languages, SARIF 2.1.0, reusable GitHub Action. Built with machin/MFL.">
+<meta property="og:description" content="KISS agent-first security auditor. 1,000 CWE-tagged rules, 25 languages, SARIF 2.1.0, reusable GitHub Action. Built with machin/MFL.">
 <style>
   :root{
     --bg:#0a0c10; --panel:#12161d; --border:#222932; --fg:#e6edf3;
@@ -60,7 +60,7 @@
 </head>
 <body>
 <header><div class="wrap">
-  <div class="badge">v1.5.0 · 235 rules · 25 languages · SARIF 2.1.0</div>
+  <div class="badge">v2.0.0 · 1,000 rules · 25 languages · SARIF 2.1.0</div>
   <h1>machin-secure</h1>
   <p class="tag">A security auditor where the tool owns <b>no model</b> — the calling agent <i>is</i> the LLM.<br>
     Single ~88&nbsp;KB binary. Deterministic regex rules. Agent-managed verdicts. CI-native.</p>
@@ -126,7 +126,7 @@
 </section>
 
 <section id="rules">
-  <h2>235 CWE-tagged detections across 25 languages</h2>
+  <h2>1,000 CWE-tagged detections across 25 languages</h2>
   <p class="lead"><code>rules.json</code> is plain data, read fresh from disk every run — extend it without recompiling. The rule pack is the actual product; the engine is interchangeable.</p>
   <div class="grid">
     <div class="card"><h3>Secrets</h3><p><span class="sev crit">CWE-798</span> AWS, Google, Slack, GitHub PAT, Stripe, JWT, private keys, generic high-entropy, connection strings, config files (.properties, TOML, INI), hardcoded JWT secrets.</p></div>
@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: javimosch/machin-secure@v1
+      - uses: javimosch/machin-secure@v2
         with:
           target: '.'
       - uses: github/codeql-action/upload-sarif@v3

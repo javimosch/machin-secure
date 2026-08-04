@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: javimosch/machin-secure@v1
+      - uses: javimosch/machin-secure@v2
         with:
           target: '.'
       - uses: github/codeql-action/upload-sarif@v3
