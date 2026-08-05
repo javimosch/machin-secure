@@ -132,6 +132,13 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   pre-v2.2.0 when `--context` is not set (the empty arrays are stripped from
   the JSONL). Works in all scan modes: single-file, `--diff`, `--diff-base`,
   and parallel directory walk.
+- **`--pending`** (v2.2.0): emits only unreviewed findings (`verdict == ""`),
+  excluding both `keep` (reviewed, confirmed) and `drop` (suppressed). This is
+  the agent's work queue — "here's what's new since last triage." Combined
+  with `--diff-base`, a PR scan shows only new findings in changed files that
+  haven't been triaged yet — the tightest possible loop. Works with all output
+  modes: JSONL, `--sarif`, `--summary`. Takes precedence over `--show-all`
+  (even with show-all, pending excludes reviewed findings).
 - No index, no database, no run journal. The filesystem is scanned fresh every
   time — freshness over sophistication. The one piece of state that *does*
   persist is the verdict store, and only because it's the agent's own memory,

@@ -75,6 +75,7 @@ var version = "0.1.0"
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
 var want_show_all = false
+var want_pending = false
 var context_n = 0
 // lang -> applicable rules, built once per distinct lang instead of once per
 // file (avoids re-walking all rules for every one of tens of thousands of files)
@@ -581,6 +582,9 @@ func emit_jsonl() {
 	// suffix differs, so the replace is a no-op and the full output is kept.
 	strip := ",\"ctx_before\":[],\"ctx_after\":[]"
 	for _, f := range run.findings {
+		// --pending: only unreviewed findings (verdict == ""). Excludes both
+		// "keep" (reviewed, confirmed) and "drop" (suppressed).
+		if want_pending && f.verdict != "" { continue }
 		s := json(f)
 		if context_n == 0 { s = replace(s, strip, "") }
 		println(s)
@@ -590,6 +594,8 @@ func emit_jsonl() {
 func emit_summary() {
 	crit := 0 ; high := 0 ; med := 0 ; low := 0
 	for _, f := range run.findings {
+		// --pending: only count unreviewed findings in the severity breakdown.
+		if want_pending && f.verdict != "" { continue }
 		if f.severity == "critical" { crit = crit + 1 }
 		if f.severity == "high" { high = high + 1 }
 		if f.severity == "medium" { med = med + 1 }
@@ -658,8 +664,12 @@ func emit_sarif(rules) {
 		rules_arr = rules_arr + ",\"security-severity\":" + json(sarif_sec_severity(rule.severity)) + "}}"
 	}
 	results_arr := ""
-	for j, f := range run.findings {
-		if j > 0 { results_arr = results_arr + "," }
+	first := true
+	for _, f := range run.findings {
+		// --pending: only unreviewed findings (verdict == "").
+		if want_pending && f.verdict != "" { continue }
+		if !first { results_arr = results_arr + "," }
+		first = false
 		idx := rule_idx[f.rule]
 		results_arr = results_arr + "{\"ruleId\":" + json(f.rule)
 		results_arr = results_arr + ",\"ruleIndex\":" + str(idx)
@@ -818,6 +828,7 @@ func main() {
 		if arg == "--hart-artifact" { i = i + 1 ; if i < len(a) { hart_artifact = a[i] } }
 		if arg == "--store" { i = i + 1 ; if i < len(a) { store_path = a[i] } }
 		if arg == "--show-all" { want_show_all = true }
+		if arg == "--pending" { want_pending = true }
 		if arg == "--diff" { want_diff = true }
 		if arg == "--diff-base" { want_diff = true ; i = i + 1 ; if i < len(a) { diff_base = a[i] } }
 		if arg == "--workers" { i = i + 1 ; if i < len(a) { workers = parse_int(a[i]) } }
@@ -844,6 +855,9 @@ func main() {
 		println("  --sarif              emit a SARIF 2.1.0 report on stdout (for GitHub Code Scanning)")
 		println("                       — pipe to a file and upload with github/codeql-action/upload-sarif")
 		println("  --show-all           include findings the agent already marked 'drop'")
+		println("  --pending            emit only unreviewed findings (verdict == \"\") — the agent's")
+		println("                       work queue. Excludes both 'keep' (reviewed) and 'drop'")
+		println("                       (suppressed). Combine with --diff-base for PR-scoped triage.")
 		println("  --store PATH         verdict store (default: <target-dir>/.machin-secure.verdicts.json)")
 		println("  --diff               scan only files changed in the working tree (git diff --name-only)")
 		println("  --diff-base REF      scan only files changed vs REF (git diff --name-only REF...HEAD),")
