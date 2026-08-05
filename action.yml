@@ -70,8 +70,10 @@ runs:
         "$TOOL_DIR/secure" --sarif --target "$TARGET" --rules "$RULES_PATH" $EXTRA_ARGS > "$OUTPUT"
         code=$?
         set -e
-        if [ "$code" = "1" ]; then
-          echo "::error::machin-secure failed (exit 1) — see SARIF output or run secure directly"
+        # cli-output-spec: semantic exit codes. 0 = clean, 2 = findings present
+        # (backward compat), 80+ = typed error (see the error JSON on stdout).
+        if [ "$code" -ge 80 ]; then
+          echo "::error::machin-secure failed (exit $code) — see typed error JSON in SARIF output"
           cat "$OUTPUT"
           exit 1
         fi

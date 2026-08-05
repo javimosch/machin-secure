@@ -171,6 +171,20 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   `FEEDBACK_RELAY=off` disables. Client-generated idempotency key (8 random bytes hex).
   Like remotecmd, machin-secure is a peer tool with no local feedback endpoint, so it
   adopts the relay-only variant of the spec.
+- **cli-output-spec v1.0** (v2.3.1): the output contract — stdout = data only
+  (JSONL/SARIF/summary, all parseable), semantic exit codes (0, 2, 80-119), typed
+  errors with `recoverable` + `suggestions`, `help-json` introspection, no internal
+  retries, non-interactive by default. All errors now emit
+  `{"ok":false,"error":{"code":N,"type":"...","message":"...","recoverable":bool,"suggestions":[...]}}`
+  and exit with the matching code. `secure help-json` returns the machine-readable
+  command catalog (commands, flags, exit codes, env vars). `--json`/`--no-interactive`/
+  `--yes`/`--no-color` are accepted as no-ops (the tool is already JSONL-by-default and
+  non-interactive). Summary output now includes a `version` field (additive, per spec §1).
+  Note: errors go to stdout (not stderr) because MFL has no stderr builtin; the JSON
+  structure is spec-compliant, and agents reading stdout get the full result including
+  errors. Exit code 2 (findings present) is kept for backward compatibility with the
+  GitHub Action and CI pipelines — it predates the 80-119 ranges and is documented in
+  `help-json` and `--help`.
 
 ## Known limitations / next steps (only build if actually needed)
 

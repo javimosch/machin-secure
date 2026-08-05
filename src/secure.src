@@ -99,6 +99,24 @@ var lang_rules_cache = make(map[string][]Rule)
 
 // ---- helpers ----
 
+// fail emits a typed error (cli-output-spec §3) on stdout and exits with a
+// semantic exit code (§2). The error body is JSON with ok, code, type, message,
+// recoverable, and optional suggestions. code >= 100 → recoverable (transient);
+// code < 100 → not recoverable (input/bug — agent should fix, not retry).
+// suggestion is a single string (or ""); if non-empty it becomes a one-element
+// suggestions array. MFL .src has no array literals, so we build JSON by hand.
+func fail(code, typ, msg, suggestion) {
+	rec := false
+	if code >= 100 { rec = true }
+	sug := "[]"
+	if suggestion != "" { sug = "[" + json(suggestion) + "]" }
+	rec_s := "false"
+	if rec { rec_s = "true" }
+	body := "{\"ok\":false,\"error\":{\"code\":" + str(code) + ",\"type\":" + json(typ) + ",\"message\":" + json(msg) + ",\"recoverable\":" + rec_s + ",\"suggestions\":" + sug + "}}"
+	println(body)
+	exit(code)
+}
+
 func last_index(s, sub) (n) {
 	n = -1
 	j := 0
@@ -528,8 +546,7 @@ func diff_scan(target, base, rules) {
 	if base != "" { cmd = cmd + " " + base + "...HEAD" }
 	code, out, errout := exec(cmd)
 	if code != 0 {
-		println("{\"error\":\"git diff failed: " + trim(errout) + "\"}")
-		exit(1)
+		fail(90, "git_diff_failed", "git diff failed: " + trim(errout), "check that the target is a git repo and the base ref exists")
 	}
 	paths := split(out, "\n")
 	for _, p := range paths {
@@ -721,7 +738,12 @@ func emit_summary() {
 	m["skipped"] = run.skipped
 	m["suppressed"] = run.suppressed
 	m["rules"] = run.rules_n
-	println(json(m))
+	// cli-output-spec §1: include version so consumers can detect schema changes.
+	// m is map[string]int, so we emit the ints via json(m) and splice in the
+	// version string by hand (MFL has no `any` map value type).
+	s := json(m)
+	s = substr(s, 0, len(s)-1) + ",\"version\":" + json(version) + "}"
+	println(s)
 }
 
 // ---- SARIF 2.1.0 output (for GitHub Code Scanning / SARIF consumers) ----
@@ -891,12 +913,10 @@ func cmd_verdict(a) {
 	}
 
 	if id == "" || verdict == "" {
-		println("{\"error\":\"usage: secure verdict --target PATH <id> <keep|drop> [--reason TEXT]\"}")
-		exit(1)
+		fail(80, "invalid_arguments", "usage: secure verdict --target PATH <id> <keep|drop> [--reason TEXT]", "secure verdict --help")
 	}
 	if verdict != "keep" && verdict != "drop" {
-		println("{\"error\":\"verdict must be 'keep' or 'drop'\"}")
-		exit(1)
+		fail(85, "invalid_verdict", "verdict must be 'keep' or 'drop'", "use keep to confirm or drop to suppress")
 	}
 	save_verdict(store_path, id, verdict, reason)
 	println("{\"stored\":1,\"id\":\"" + id + "\",\"verdict\":\"" + verdict + "\",\"store\":\"" + store_path + "\"}")
@@ -981,8 +1001,7 @@ func cmd_suppress(a) {
 	}
 
 	if rule == "" || glob == "" {
-		println("{\"error\":\"usage: secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]\"}")
-		exit(1)
+		fail(80, "invalid_arguments", "usage: secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]", "secure suppress --help")
 	}
 	save_pattern(store_path, rule, glob, reason)
 	println("{\"stored\":1,\"rule\":\"" + rule + "\",\"glob\":\"" + glob + "\",\"store\":\"" + store_path + "\"}")
@@ -1144,8 +1163,7 @@ func cmd_feedback(a) {
 	}
 
 	if msg == "" {
-		println("{\"ok\":false,\"error\":\"usage: secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note] [--context TEXT]\"}")
-		exit(1)
+		fail(80, "invalid_arguments", "usage: secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context TEXT]", "secure feedback --help")
 	}
 
 	// client-generated idempotency key: 8 random bytes hex-encoded
@@ -1182,6 +1200,38 @@ func bool_to_int(b) (n) {
 	if b { n = 1 }
 }
 
+// ---- `secure help-json` subcommand (cli-output-spec §4) ----
+// Machine-readable command catalog: commands, args, flags, auth, exit codes, env.
+// Complementary to `secure guide` (the mental model) and `secure --help` (human help).
+
+func cmd_help_json(a) {
+	h := "{"
+	h = h + "\"version\":\"" + version + "\","
+	h = h + "\"output\":\"jsonl\","
+	h = h + "\"commands\":{"
+	h = h + "\"scan\":{\"args\":[\"[target]\"],\"flags\":[\"--rules PATH\",\"--summary\",\"--sarif\",\"--show-all\",\"--pending\",\"--store PATH\",\"--patterns-store PATH\",\"--diff\",\"--diff-base REF\",\"--workers N\",\"--context N\",\"--hart\",\"--hart-owner NAME\",\"--hart-artifact NAME\",\"--json\",\"--no-interactive\",\"--yes\",\"--no-color\"],\"auth\":false},"
+	h = h + "\"verdict\":{\"args\":[\"<id>\",\"<keep|drop>\"],\"flags\":[\"--target PATH\",\"--store PATH\",\"--reason TEXT\",\"--stdin\"],\"auth\":false},"
+	h = h + "\"suppress\":{\"args\":[],\"flags\":[\"--target PATH\",\"--rule RULE\",\"--glob GLOB\",\"--reason TEXT\",\"--patterns-store PATH\",\"--stdin\"],\"auth\":false},"
+	h = h + "\"guide\":{\"args\":[],\"flags\":[\"--human\"],\"auth\":false},"
+	h = h + "\"feedback\":{\"args\":[\"<message>\"],\"flags\":[\"--kind bug|idea|praise|note\",\"--context TEXT\"],\"auth\":false},"
+	h = h + "\"help-json\":{\"args\":[],\"flags\":[],\"auth\":false}"
+	h = h + "},"
+	h = h + "\"exit_codes\":{"
+	h = h + "\"0\":\"success (clean scan or command completed)\","
+	h = h + "\"2\":\"findings present (high/critical) — backward compat, not in 80-119 range\","
+	h = h + "\"80\":\"invalid arguments / usage error\","
+	h = h + "\"85\":\"invalid argument value (e.g. bad verdict, diff on non-dir)\","
+	h = h + "\"90\":\"precondition/resource (git diff failed)\","
+	h = h + "\"92\":\"resource not found (target, rules file)\","
+	h = h + "\"100\":\"external/integration error (relay unreachable)\","
+	h = h + "\"110\":\"internal error / bug\""
+	h = h + "},"
+	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\"],"
+	h = h + "\"see_also\":[\"secure guide\",\"secure --help\"]"
+	h = h + "}"
+	println(h)
+}
+
 // ---- arg parsing ----
 
 func main() {
@@ -1204,6 +1254,11 @@ func main() {
 
 	if len(a) > 1 && a[1] == "feedback" {
 		cmd_feedback(a)
+		return
+	}
+
+	if len(a) > 1 && (a[1] == "help-json" || a[1] == "--help-json") {
+		cmd_help_json(a)
 		return
 	}
 
@@ -1240,6 +1295,10 @@ func main() {
 		if arg == "--workers" { i = i + 1 ; if i < len(a) { workers = parse_int(a[i]) } }
 		if arg == "--context" { i = i + 1 ; if i < len(a) { context_n = parse_int(a[i]) } }
 		if arg == "--help" || arg == "-h" { help = true }
+		// cli-output-spec §6: no-op flags for non-interactive / JSON-by-default.
+		// machin-secure is already non-interactive and JSONL-by-default, so these
+		// are accepted and ignored — they let agents pass them uniformly across tools.
+		if arg == "--json" || arg == "--no-interactive" || arg == "--yes" || arg == "-y" || arg == "--no-color" {}
 		if has_prefix(arg, "-") == false && target == "" && i > 0 { target = arg }
 		i = i + 1
 	}
@@ -1252,6 +1311,7 @@ func main() {
 		println("       secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]")
 		println("       secure guide [--human]")
 		println("       secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context TEXT]")
+		println("       secure help-json")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -1289,11 +1349,14 @@ func main() {
 		println("")
 		println("output: one JSON finding per line on stdout (JSONL). Each finding has a")
 		println("stable \"id\" — pass it to `secure verdict` to keep or drop it.")
-		println("exit:   0 = clean, 1 = error, 2 = high/critical findings present")
+		println("exit:   0 = clean, 2 = high/critical findings present (backward compat)")
+		println("       80-89 = input/validation · 90-99 = precondition/resource")
+		println("       100-109 = external · 110-119 = internal (cli-output-spec §2)")
 		println("")
 		println("subcommands:")
 		println("  secure guide [--human]   the embedded agent skill (cli-guide-spec): model,")
 		println("                          loop, concepts, commands, examples, gotchas")
+		println("  secure help-json         machine-readable command catalog (cli-output-spec §4)")
 		println("  secure feedback \"<msg>\"  send feedback to the maintainer (cli-feedback-spec)")
 		println("                          — best-effort, never fails. FEEDBACK_RELAY=off to disable")
 		return
@@ -1303,8 +1366,7 @@ func main() {
 
 	rules := load_rules(rules_path)
 	if len(rules) == 0 {
-		println("{\"error\":\"no rules loaded from " + rules_path + "\"}")
-		exit(1)
+		fail(92, "rules_not_found", "no rules loaded from " + rules_path, "check --rules path, or use the bundled rules.json")
 	}
 
 	if store_path == "" { store_path = default_store_path(target) }
@@ -1318,13 +1380,11 @@ func main() {
 
 	k, _, _ := stat(target)
 	if k == 0 {
-		println("{\"error\":\"target not found: " + target + "\"}")
-		exit(1)
+		fail(92, "target_not_found", "target not found: " + target, "check the --target path")
 	}
 	if want_diff {
 		if k != 2 {
-			println("{\"error\":\"--diff requires a directory target (a git repo root)\"}")
-			exit(1)
+			fail(85, "diff_requires_directory", "--diff requires a directory target (a git repo root)", "remove --diff, or pass a directory with --target")
 		}
 		diff_scan(target, diff_base, rules)
 	} else if k == 1 {
