@@ -84,6 +84,18 @@ jobs:
           ( cd dist && tar czf "machin-secure-${TAG}-linux-amd64.tar.gz" machin-secure )
           ( cd dist && cp "machin-secure-${TAG}-linux-amd64.tar.gz" machin-secure-linux-amd64.tar.gz )
           ( cd dist && sha256sum machin-secure-${TAG}-linux-amd64.tar.gz machin-secure-linux-amd64.tar.gz > SHA256SUMS.txt )
+          # cli-update-spec §2: version.json — the content-hash version endpoint.
+          # The version is sha256[:12] of the stable-named tarball (the artifact
+          # `secure update` downloads). This file is uploaded to both the version
+          # tag release and the moving major tag release, so
+          # https://github.com/javimosch/machin-secure/releases/download/v2/version.json
+          # always points at the latest version metadata.
+          FULL_SHA=$(sha256sum dist/machin-secure-linux-amd64.tar.gz | cut -d' ' -f1)
+          CONTENT_HASH="${FULL_SHA:0:12}"
+          DOWNLOAD_URL="/javimosch/machin-secure/releases/download/v2/machin-secure-linux-amd64.tar.gz"
+          printf '{"ok":true,"version":"%s","download":"%s","sha256":"%s"}\n' \
+            "$CONTENT_HASH" "$DOWNLOAD_URL" "$FULL_SHA" > dist/version.json
+          echo "version.json: $(cat dist/version.json)"
           ls -l dist/
 
       - name: Attach assets to the version release
@@ -93,9 +105,9 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt --clobber
+            gh release upload "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt dist/version.json --clobber
           else
-            gh release create "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt \
+            gh release create "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt dist/version.json \
               --generate-notes --title "${TAG}"
           fi
 
@@ -113,10 +125,10 @@ jobs:
           # Mirror the stable-named asset to the major tag's release so
           # `uses: ...@vN` can fetch machin-secure-linux-amd64.tar.gz by URL.
           if gh release view "$MAJOR" >/dev/null 2>&1; then
-            gh release upload "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt --clobber
+            gh release upload "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt dist/version.json --clobber
             gh release edit "$MAJOR" --title "${MAJOR} (moving — latest ${TAG})"
           else
-            gh release create "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt \
+            gh release create "$MAJOR" dist/machin-secure-linux-amd64.tar.gz dist/SHA256SUMS.txt dist/version.json \
               --generate-notes --title "${MAJOR} (moving — latest ${TAG})"
           fi
           echo "Synced ${MAJOR} → ${SHA} (release ${TAG})"

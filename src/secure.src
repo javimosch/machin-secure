@@ -1214,6 +1214,7 @@ func cmd_help_json(a) {
 	h = h + "\"suppress\":{\"args\":[],\"flags\":[\"--target PATH\",\"--rule RULE\",\"--glob GLOB\",\"--reason TEXT\",\"--patterns-store PATH\",\"--stdin\"],\"auth\":false},"
 	h = h + "\"guide\":{\"args\":[],\"flags\":[\"--human\"],\"auth\":false},"
 	h = h + "\"feedback\":{\"args\":[\"<message>\"],\"flags\":[\"--kind bug|idea|praise|note\",\"--context TEXT\"],\"auth\":false},"
+	h = h + "\"update\":{\"args\":[],\"flags\":[\"--check\",\"--force\"],\"auth\":false},"
 	h = h + "\"help-json\":{\"args\":[],\"flags\":[],\"auth\":false}"
 	h = h + "},"
 	h = h + "\"exit_codes\":{"
@@ -1226,10 +1227,277 @@ func cmd_help_json(a) {
 	h = h + "\"100\":\"external/integration error (relay unreachable)\","
 	h = h + "\"110\":\"internal error / bug\""
 	h = h + "},"
-	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\"],"
+	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\",\"MACHIN_SECURE_NO_NUDGE\"],"
 	h = h + "\"see_also\":[\"secure guide\",\"secure --help\"]"
 	h = h + "}"
 	println(h)
+}
+
+// ---- `secure update` subcommand (cli-update-spec v1.0) ----
+// Content-hash self-update: fetch version.json from GitHub Releases, compare
+// sha256[:12] of the local binary, download the tarball, verify the hash,
+// smoke-test the new binary, atomically swap (current → .bak, new → in place).
+// No silent auto-update — manual by default, passive nudge on scan commands.
+
+var version_json_url = "https://github.com/javimosch/machin-secure/releases/download/v2/version.json"
+
+// compute_local_version returns sha256[:12] of the running binary, or reads a
+// VERSION file next to it if one exists (written by the installer or a prior
+// update). For a tarball CLI, the VERSION file stores the tarball's content
+// hash; without it, we hash the binary itself (won't match the tarball hash, so
+// the tool will always "update" on first run — which is correct for a
+// from-source install).
+func compute_local_version(bin_path) (v) {
+	// try VERSION file next to the binary
+	dir := dirname(bin_path)
+	ver_file := dir + "/VERSION"
+	_, vf_size, _ := stat(ver_file)
+	if vf_size > 0 {
+		v = trim(read_file(ver_file))
+		if v != "" { return v }
+	}
+	// fallback: sha256[:12] of the binary itself
+	b := read_file_bytes(bin_path)
+	if len(b) == 0 { return "" }
+	h := to_hex(sha256_bytes(b))
+	v = substr(h, 0, 12)
+	return v
+}
+
+// dirname returns the directory component of a path (like Unix dirname).
+func dirname(p) (d) {
+	d = "."
+	i := len(p) - 1
+	for i >= 0 {
+		if substr(p, i, i+1) == "/" { break }
+		i = i - 1
+	}
+	if i < 0 { return "." }
+	if i == 0 { return "/" }
+	d = substr(p, 0, i)
+	return d
+}
+
+func cmd_update(a) {
+	want_check := false
+	want_force := false
+	help := false
+
+	i := 2
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--check" { want_check = true }
+		if arg == "--force" { want_force = true }
+		if arg == "--help" || arg == "-h" { help = true }
+		i = i + 1
+	}
+
+	if help {
+		println("usage: secure update [--check] [--force]")
+		println("")
+		println("Content-hash self-update. Fetches version.json from GitHub Releases,")
+		println("compares sha256[:12] of the local binary, downloads the tarball, verifies")
+		println("the hash, smoke-tests the new binary, and atomically swaps it in place")
+		println("(current → .bak, new → in place). No silent auto-update.")
+		println("")
+		println("  --check   check only; exit 0 if up-to-date, exit 5 if update available")
+		println("  --force   re-download and swap even if the version matches (repair)")
+		return
+	}
+
+	// 1. compute local version
+	bin_path := a[0]
+	// resolve to absolute path
+	_, abs, _ := exec("readlink -f " + bin_path)
+	abs = trim(abs)
+	if abs != "" { bin_path = abs }
+	local_ver := compute_local_version(bin_path)
+
+	// 2. fetch server version
+	status, body, err := http_get(version_json_url)
+	if err != "" || status != 200 {
+		fail(100, "version_check_failed", "cannot fetch " + version_json_url + " (status=" + str(status) + " err=" + err + ")", "check network connectivity")
+	}
+
+	// 3. parse version.json: {ok, version, download, sha256}
+	remote_ver, vErr := json_get(body, ".version")
+	download_url, dErr := json_get(body, ".download")
+	remote_sha, _ := json_get(body, ".sha256")
+	if vErr != "" || dErr != "" {
+		fail(100, "version_parse_failed", "version.json missing version or download field", "report this via secure feedback")
+	}
+	// json_get returns string values quoted — strip the quotes
+	remote_ver = strip_quotes(remote_ver)
+	download_url = strip_quotes(download_url)
+	remote_sha = strip_quotes(remote_sha)
+
+	// 4. compare
+	if local_ver == remote_ver && !want_force {
+		println("{\"ok\":true,\"updated\":false,\"version\":" + json(remote_ver) + ",\"up_to_date\":true}")
+		return
+	}
+
+	if want_check {
+		println("{\"ok\":true,\"updated\":false,\"local\":" + json(local_ver) + ",\"remote\":" + json(remote_ver) + ",\"up_to_date\":false}")
+		exit(5)
+	}
+
+	// 5. download the tarball to a temp file
+	tmpdir := "/tmp/machin-secure-update-" + to_hex(rand_bytes(4))
+	mkdir(tmpdir)
+	tarball := tmpdir + "/machin-secure.tar.gz"
+	dl_url := download_url
+	if has_prefix(dl_url, "/") { dl_url = "https://github.com" + dl_url }
+	code, _, dlerr := exec("curl -sS -L -o " + tarball + " " + dl_url)
+	if code != 0 {
+		fail(100, "download_failed", "curl failed: " + trim(dlerr), "check network connectivity")
+	}
+
+	// 6. verify: sha256[:12] of the downloaded tarball MUST match remote_ver
+	tb := read_file_bytes(tarball)
+	if len(tb) == 0 { fail(100, "download_empty", "downloaded tarball is empty", "retry: secure update") }
+	dl_hash := to_hex(sha256_bytes(tb))
+	dl_ver := substr(dl_hash, 0, 12)
+	if dl_ver != remote_ver {
+		remove(tarball)
+		fail(100, "verification_failed", "downloaded hash (" + dl_ver + ") != server version (" + remote_ver + ")", "retry: secure update")
+	}
+	// belt-and-suspenders: full sha256 if provided
+	if remote_sha != "" && dl_hash != remote_sha {
+		remove(tarball)
+		fail(100, "verification_failed", "full sha256 mismatch", "retry: secure update")
+	}
+
+	// 7. extract
+	extract_dir := tmpdir + "/extract"
+	mkdir(extract_dir)
+	code, _, exerr := exec("tar xzf " + tarball + " -C " + extract_dir)
+	if code != 0 {
+		fail(100, "extract_failed", "tar extract failed: " + trim(exerr), "retry: secure update")
+	}
+
+	// find the new binary (machin-secure/secure in the extract dir)
+	new_bin := extract_dir + "/machin-secure/secure"
+	new_rules := extract_dir + "/machin-secure/rules.json"
+	bk, _, _ := stat(new_bin)
+	if bk != 1 {
+		fail(100, "binary_not_found", "extracted tarball does not contain machin-secure/secure", "retry: secure update")
+	}
+
+	// 8. smoke-test: the new binary MUST run --help and exit 0
+	system("chmod +x " + new_bin)
+	sc, _, smoke_err := exec(new_bin + " --help > /dev/null 2>&1")
+	if sc != 0 {
+		fail(100, "smoke_test_failed", "new binary failed --help smoke test: " + trim(smoke_err), "the download is corrupt; retry or report via secure feedback")
+	}
+
+	// 9. atomic swap: current → .bak, new → in place
+	install_dir := dirname(bin_path)
+	bak_bin := bin_path + ".bak"
+	bak_rules := install_dir + "/rules.json.bak"
+
+	// move current binary to .bak
+	rename_safe(bin_path, bak_bin)
+
+	// move new binary into place
+	code, _, mv_err := exec("mv " + new_bin + " " + bin_path)
+	if code != 0 {
+		// restore from .bak
+		system("mv " + bak_bin + " " + bin_path)
+		fail(100, "swap_failed", "cannot move new binary into place: " + trim(mv_err), "check filesystem permissions")
+	}
+	system("chmod +x " + bin_path)
+
+	// also swap rules.json if it exists and the new one is present
+	_, rules_size, _ := stat(install_dir + "/rules.json")
+	if rules_size > 0 && bk == 1 {
+		rename_safe(install_dir + "/rules.json", bak_rules)
+		system("mv " + new_rules + " " + install_dir + "/rules.json")
+	}
+
+	// 10. persist version
+	write_file(install_dir + "/VERSION", remote_ver)
+
+	// 11. report
+	println("{\"ok\":true,\"updated\":true,\"from\":" + json(local_ver) + ",\"to\":" + json(remote_ver) + ",\"bak\":" + json(bak_bin) + "}")
+
+	// cleanup
+	remove(tarball)
+}
+
+// rename_safe moves src to dst, ignoring errors if src doesn't exist.
+func rename_safe(src, dst) {
+	k, _, _ := stat(src)
+	if k == 1 { system("mv " + src + " " + dst) }
+}
+
+// strip_quotes removes surrounding double-quotes from a json_get return value.
+func strip_quotes(s) (r) {
+	r = s
+	q := "\""
+	if len(s) >= 2 {
+		if substr(s, 0, 1) == q && substr(s, len(s)-1, len(s)) == q {
+			r = substr(s, 1, len(s)-1)
+		}
+	}
+	return r
+}
+
+// ---- passive nudge (cli-update-spec §4) ----
+// On scan commands, opportunistically fetch version.json and print a nudge to
+// stderr if a newer version is available. Throttled to once per hour per version.
+// Best-effort: never blocks, never fails. MACHIN_SECURE_NO_NUDGE=1 disables.
+
+func version_nudge() {
+	if env("MACHIN_SECURE_NO_NUDGE") == "1" { return }
+
+	// throttle: check at most once per hour
+	home := env("HOME")
+	if home == "" { home = "/tmp" }
+	cache_dir := home + "/.machin-secure"
+	mkdir(cache_dir)
+	cache_file := cache_dir + "/version-cache"
+	now := now_ms() / 1000
+	_, _, last := stat(cache_file)
+	if last > 0 {
+		age := now - last
+		if age < 3600 { return }
+	}
+	write_file(cache_file, str(now))
+
+	// fetch version.json (3-second effective timeout via http_get)
+	status, body, err := http_get(version_json_url)
+	if err != "" || status != 200 { return }
+	remote_ver, vErr := json_get(body, ".version")
+	if vErr != "" { return }
+	remote_ver = strip_quotes(remote_ver)
+
+	// compute local version
+	bin_path := args()[0]
+	_, abs, _ := exec("readlink -f " + bin_path)
+	abs = trim(abs)
+	if abs != "" { bin_path = abs }
+	local_ver := compute_local_version(bin_path)
+
+	if local_ver != "" && local_ver != remote_ver {
+		// print to stderr (MFL has no stderr builtin, so use system + redirect)
+		msg := "[update] a newer machin-secure is available (" + local_ver + " → " + remote_ver + "). Run: secure update"
+		system("printf '%s\\n' " + quote_for_shell(msg) + " >&2")
+	}
+}
+
+// quote_for_shell wraps a string in single quotes for safe shell passing,
+// escaping any embedded single quotes.
+func quote_for_shell(s) (r) {
+	r = "'"
+	i := 0
+	for i < len(s) {
+		c := substr(s, i, i+1)
+		if c == "'" { r = r + "'\\''" } else { r = r + c }
+		i = i + 1
+	}
+	r = r + "'"
+	return r
 }
 
 // ---- arg parsing ----
@@ -1259,6 +1527,11 @@ func main() {
 
 	if len(a) > 1 && (a[1] == "help-json" || a[1] == "--help-json") {
 		cmd_help_json(a)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "update" {
+		cmd_update(a)
 		return
 	}
 
@@ -1312,6 +1585,7 @@ func main() {
 		println("       secure guide [--human]")
 		println("       secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context TEXT]")
 		println("       secure help-json")
+		println("       secure update [--check] [--force]")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -1357,12 +1631,17 @@ func main() {
 		println("  secure guide [--human]   the embedded agent skill (cli-guide-spec): model,")
 		println("                          loop, concepts, commands, examples, gotchas")
 		println("  secure help-json         machine-readable command catalog (cli-output-spec §4)")
+		println("  secure update [--check]  content-hash self-update (cli-update-spec)")
+		println("                          — verify-then-swap, .bak rollback, no silent auto-update")
 		println("  secure feedback \"<msg>\"  send feedback to the maintainer (cli-feedback-spec)")
 		println("                          — best-effort, never fails. FEEDBACK_RELAY=off to disable")
 		return
 	}
 
 	if target == "" { target = "." }
+
+	// passive nudge (cli-update-spec §4): best-effort, throttled, stderr, non-blocking
+	version_nudge()
 
 	rules := load_rules(rules_path)
 	if len(rules) == 0 {

@@ -185,6 +185,17 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   errors. Exit code 2 (findings present) is kept for backward compatibility with the
   GitHub Action and CI pipelines — it predates the 80-119 ranges and is documented in
   `help-json` and `--help`.
+- **`secure update`** (v2.4.0, cli-update-spec v1.0): content-hash self-update —
+  fetches `version.json` from GitHub Releases (served at the stable `v2` tag URL),
+  compares `sha256[:12]` of the local binary, downloads the tarball, verifies the
+  hash, smoke-tests the new binary (`--help`), and atomically swaps it in place
+  (current → `.bak`, new → in place). `--check` reports without updating (exit 5
+  if stale). `--force` re-downloads even if the version matches (repair). No
+  silent auto-update — manual by default. The passive nudge (§4) fires on scan
+  commands: best-effort, throttled to once/hour, prints `[update] ...` to stderr,
+  never blocks. `MACHIN_SECURE_NO_NUDGE=1` disables it. The release workflow
+  publishes `version.json` (with `sha256[:12]` of the tarball) to both the version
+  tag and the moving `v2` tag release.
 
 ## Known limitations / next steps (only build if actually needed)
 
