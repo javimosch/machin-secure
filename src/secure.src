@@ -52,6 +52,21 @@ type VerdictRec struct {
 	ts      int
 }
 
+// suppression pattern persisted by `secure suppress` — the agent's rule-level
+// false-positive memory. When a finding's (rule, file) matches a pattern, the
+// finding is suppressed automatically (counted in `suppressed`, not emitted
+// unless --show-all). This is the force multiplier: triage a pattern once,
+// not 30 individual findings. Like the verdict store, this tool never decides
+// to file a pattern itself — the agent does, after seeing repeated false
+// positives from the same rule on the same file shape.
+type SuppressPattern struct {
+	rule    string
+	glob    string
+	reason  string
+	verdict string
+	ts      int
+}
+
 // a file queued for scanning, and one worker's local (never-shared) tally —
 // per machin's data-race rule, only the collector goroutine (main) may ever
 // touch the `run` global; workers accumulate into their own WorkerResult and
@@ -74,6 +89,7 @@ var version = "0.1.0"
 // global run state (structs are pass-by-value in MFL; a global avoids copying)
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
+var patterns = []SuppressPattern{}
 var want_show_all = false
 var want_pending = false
 var context_n = 0
@@ -193,6 +209,90 @@ func save_verdict(path, id, verdict, reason) {
 		out = append(out, VerdictRec{id: id, verdict: verdict, reason: reason, ts: now()})
 	}
 	write_file(path, json(out))
+}
+
+// ---- suppression pattern store (rule-level false-positive memory) ----
+// Mirrors the verdict store: the agent files a pattern via `secure suppress`,
+// and at scan time findings matching (rule, glob) are suppressed automatically.
+// The store lives next to the verdict store, gitignored or committed (operator's
+// choice — committing shares the team's triage across clones).
+
+func default_patterns_path(target) (path) {
+	k, _, _ := stat(target)
+	dir := target
+	if k == 1 {
+		bi := last_index(target, "/")
+		dir = "."
+		if bi >= 0 { dir = substr(target, 0, bi) }
+	}
+	path = dir + "/.machin-secure.patterns.json"
+}
+
+func load_pattern_recs(path) (recs) {
+	recs = []SuppressPattern{}
+	s := read_file(path)
+	if len(s) == 0 { return }
+	recs = parse(s, []SuppressPattern{})
+}
+
+func load_patterns(path) {
+	patterns = load_pattern_recs(path)
+}
+
+func save_pattern(path, rule, glob, reason) {
+	recs := load_pattern_recs(path)
+	out := []SuppressPattern{}
+	found := false
+	for _, r := range recs {
+		if r.rule == rule && r.glob == glob {
+			r.reason = reason
+			r.ts = now()
+			found = true
+		}
+		out = append(out, r)
+	}
+	if !found {
+		out = append(out, SuppressPattern{rule: rule, glob: glob, reason: reason, verdict: "drop", ts: now()})
+	}
+	write_file(path, json(out))
+}
+
+// glob_match checks if a file path matches a glob pattern. v1 supports the
+// three common cases: suffix (*.vue → has_suffix), prefix (test/** →
+// has_prefix on the dir), and exact/contains fallback. No full glob library
+// — covers 90% of real suppression patterns without a dependency.
+func glob_match(path, glob) (b) {
+	b = false
+	// *.ext → suffix match on the extension
+	if has_prefix(glob, "*.") {
+		ext := substr(glob, 1, len(glob))
+		if has_suffix(path, ext) { b = true ; return }
+		return
+	}
+	// dir/** → prefix match on dir + "/"
+	if has_suffix(glob, "/**") {
+		prefix := substr(glob, 0, len(glob)-2)
+		if has_prefix(path, prefix) { b = true ; return }
+		return
+	}
+	// **/dir/ → suffix match on dir + "/"
+	if has_prefix(glob, "**/") {
+		suffix := substr(glob, 2, len(glob))
+		if has_suffix(path, suffix) { b = true ; return }
+		return
+	}
+	// exact match or substring fallback
+	if path == glob { b = true ; return }
+	if contains(path, glob) { b = true ; return }
+}
+
+// pattern_suppressed checks if a finding (rule, file) matches any suppression
+// pattern. Called in the scan loops before emitting a finding.
+func pattern_suppressed(rule, file) (b) {
+	b = false
+	for _, p := range patterns {
+		if p.rule == rule && glob_match(file, p.glob) { b = true ; return }
+	}
 }
 
 // ---- rule loading ----
@@ -391,6 +491,11 @@ func scan_file(path, lang, rules) {
 					run.suppressed = run.suppressed + 1
 					if !want_show_all { continue }
 				}
+				// rule-level suppression pattern: (rule, file) match → suppress
+				if pattern_suppressed(rule.id, path) {
+					run.suppressed = run.suppressed + 1
+					if !want_show_all { continue }
+				}
 				snip := trimmed
 				if len(snip) > 200 { snip = substr(snip, 0, 200) + "..." }
 				f := Finding{
@@ -514,6 +619,11 @@ func scan_into(path, lang, lang_rules, wr_in) (wr) {
 				id := sha256(rule.id + "|" + path + "|" + trimmed)
 				v := verdict_map[id]
 				if v == "drop" {
+					wr.suppressed = wr.suppressed + 1
+					if !want_show_all { continue }
+				}
+				// rule-level suppression pattern: (rule, file) match → suppress
+				if pattern_suppressed(rule.id, path) {
 					wr.suppressed = wr.suppressed + 1
 					if !want_show_all { continue }
 				}
@@ -793,6 +903,92 @@ func cmd_verdict(a) {
 	exit(0)
 }
 
+// ---- `secure suppress` subcommand ----
+// Persists a rule-level suppression pattern. At scan time, findings matching
+// (rule, glob) are suppressed automatically. This is the force multiplier:
+// triage a pattern once, not 30 individual findings. Like `secure verdict`,
+// this tool never decides to file a pattern itself — the agent does, after
+// seeing repeated false positives from the same rule on the same file shape.
+
+func print_suppress_help() {
+	println("usage: secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]")
+	println("       secure suppress --target PATH --stdin")
+	println("")
+	println("Persists a rule-level suppression pattern. At scan time, findings where")
+	println("the rule matches AND the file path matches the glob are suppressed")
+	println("(counted in `suppressed`, not emitted unless --show-all).")
+	println("")
+	println("This is the force multiplier: instead of dropping 30 individual findings")
+	println("from the same rule on *.vue files, file one pattern and they stay dropped.")
+	println("This tool never calls an LLM to decide this — the agent files the pattern")
+	println("after seeing repeated false positives.")
+	println("")
+	println("glob patterns supported (v1, no full glob library):")
+	println("  *.ext          suffix match (e.g. *.vue, *.test.js)")
+	println("  dir/**         prefix match (e.g. test/**, vendor/**)")
+	println("  **/dir/        suffix match (e.g. **/fixtures/)")
+	println("  other          exact match or substring fallback")
+	println("")
+	println("--stdin reads JSON Lines of {\"rule\":...,\"glob\":...,\"reason\":...}")
+	println("for batch filing after the agent has identified repeated false positives.")
+	println("")
+	println("store: <target-dir>/.machin-secure.patterns.json (override with --patterns-store PATH)")
+}
+
+func cmd_suppress(a) {
+	target := "."
+	store_path := ""
+	use_stdin := false
+	rule := ""
+	glob := ""
+	reason := ""
+	help := false
+
+	i := 2
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--target" { i = i + 1 ; if i < len(a) { target = a[i] } }
+		if arg == "--patterns-store" { i = i + 1 ; if i < len(a) { store_path = a[i] } }
+		if arg == "--rule" { i = i + 1 ; if i < len(a) { rule = a[i] } }
+		if arg == "--glob" { i = i + 1 ; if i < len(a) { glob = a[i] } }
+		if arg == "--reason" { i = i + 1 ; if i < len(a) { reason = a[i] } }
+		if arg == "--stdin" { use_stdin = true }
+		if arg == "--help" || arg == "-h" { help = true }
+		i = i + 1
+	}
+
+	if help {
+		print_suppress_help()
+		return
+	}
+
+	if store_path == "" { store_path = default_patterns_path(target) }
+
+	if use_stdin {
+		s := read_stdin()
+		lines := split(s, "\n")
+		n := 0
+		for _, line := range lines {
+			t := trim(line)
+			if t == "" { continue }
+			rec := parse(t, SuppressPattern{})
+			if rec.rule == "" || rec.glob == "" { continue }
+			save_pattern(store_path, rec.rule, rec.glob, rec.reason)
+			n = n + 1
+		}
+		println("{\"stored\":" + str(n) + ",\"store\":\"" + store_path + "\"}")
+		exit(0)
+	}
+
+	if rule == "" || glob == "" {
+		println("{\"error\":\"usage: secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]\"}")
+		exit(1)
+	}
+	save_pattern(store_path, rule, glob, reason)
+	println("{\"stored\":1,\"rule\":\"" + rule + "\",\"glob\":\"" + glob + "\",\"store\":\"" + store_path + "\"}")
+	exit(0)
+}
+
 // ---- arg parsing ----
 
 func main() {
@@ -800,6 +996,11 @@ func main() {
 
 	if len(a) > 1 && a[1] == "verdict" {
 		cmd_verdict(a)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "suppress" {
+		cmd_suppress(a)
 		return
 	}
 
@@ -811,6 +1012,7 @@ func main() {
 	hart_owner := "machin-secure"
 	hart_artifact := "audit"
 	store_path := ""
+	patterns_store := ""
 	want_diff := false
 	diff_base := ""
 	workers := 8
@@ -827,6 +1029,7 @@ func main() {
 		if arg == "--hart-owner" { i = i + 1 ; if i < len(a) { hart_owner = a[i] } }
 		if arg == "--hart-artifact" { i = i + 1 ; if i < len(a) { hart_artifact = a[i] } }
 		if arg == "--store" { i = i + 1 ; if i < len(a) { store_path = a[i] } }
+		if arg == "--patterns-store" { i = i + 1 ; if i < len(a) { patterns_store = a[i] } }
 		if arg == "--show-all" { want_show_all = true }
 		if arg == "--pending" { want_pending = true }
 		if arg == "--diff" { want_diff = true }
@@ -843,6 +1046,7 @@ func main() {
 		println("")
 		println("usage: secure [OPTIONS] [TARGET]")
 		println("       secure verdict --target PATH <id> <keep|drop> [--reason TEXT]")
+		println("       secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -859,6 +1063,10 @@ func main() {
 		println("                       work queue. Excludes both 'keep' (reviewed) and 'drop'")
 		println("                       (suppressed). Combine with --diff-base for PR-scoped triage.")
 		println("  --store PATH         verdict store (default: <target-dir>/.machin-secure.verdicts.json)")
+		println("  --patterns-store PATH suppression pattern store (default: <target-dir>/.machin-secure.patterns.json)")
+		println("                       — patterns are filed via `secure suppress` and suppress findings")
+		println("                       by (rule, glob) at scan time, so the agent triages a pattern once,")
+		println("                       not 30 individual findings. See `secure suppress --help`.")
 		println("  --diff               scan only files changed in the working tree (git diff --name-only)")
 		println("  --diff-base REF      scan only files changed vs REF (git diff --name-only REF...HEAD),")
 		println("                       for CI/PR-scoped scans; implies --diff. Target must be a git repo.")
@@ -890,6 +1098,8 @@ func main() {
 
 	if store_path == "" { store_path = default_store_path(target) }
 	load_verdicts(store_path)
+	if patterns_store == "" { patterns_store = default_patterns_path(target) }
+	load_patterns(patterns_store)
 
 	run.target = target
 	run.started = now_ms()

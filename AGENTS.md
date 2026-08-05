@@ -139,6 +139,19 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   haven't been triaged yet — the tightest possible loop. Works with all output
   modes: JSONL, `--sarif`, `--summary`. Takes precedence over `--show-all`
   (even with show-all, pending excludes reviewed findings).
+- **`secure suppress` + patterns store** (v2.2.2): rule-level false-positive
+  learning — the force multiplier. The agent files a suppression pattern
+  (`secure suppress --rule js-hardcoded-secret --glob "*.vue" --reason "Vue
+  prop bindings"`), and at scan time all findings matching `(rule, glob)` are
+  suppressed automatically. Instead of dropping 30 individual findings from
+  the same rule on `*.vue` files, file one pattern and they stay dropped.
+  Store: `.machin-secure.patterns.json` next to `.machin-secure.verdicts.json`
+  (override with `--patterns-store PATH`). Glob matching (v1, no full glob
+  library): `*.ext` (suffix), `dir/**` (prefix), `**/dir/` (suffix), exact /
+  contains fallback. Supports `--stdin` for batch filing. Like the verdict
+  store, this tool never decides to file a pattern itself — the agent does,
+  after seeing repeated false positives from the same rule on the same file
+  shape. Verified byte-identical findings (1861 on fixtures) without patterns.
 - No index, no database, no run journal. The filesystem is scanned fresh every
   time — freshness over sophistication. The one piece of state that *does*
   persist is the verdict store, and only because it's the agent's own memory,
