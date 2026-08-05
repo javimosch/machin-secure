@@ -160,6 +160,17 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   It never executes target code and never mutates the target repo.
 - `rules.json` is the actual product. The scanner is ~440 lines of MFL
   (finding engine + hart report generator + verdict store + CLI).
+- **`secure guide`** (v2.3.0, cli-guide-spec v1.0): the embedded mental model —
+  model, loop, concepts, commands, examples, gotchas. JSON by default (agent-first),
+  `--human` for readable markdown. Embedded in the binary, no network fetch. A pure-CLI
+  tool conforms without HTTP endpoints. An agent that lands on a fresh machine with only
+  the binary reads `secure guide` once and drives the tool with no external docs.
+- **`secure feedback`** (v2.3.0, cli-feedback-spec v1.0): relay-only feedback —
+  best-effort POST to `https://feedback.intrane.fr/v1/feedback`, tagged
+  `app=machin-secure`. Never fails the caller (exit 0 even if the relay is down).
+  `FEEDBACK_RELAY=off` disables. Client-generated idempotency key (8 random bytes hex).
+  Like remotecmd, machin-secure is a peer tool with no local feedback endpoint, so it
+  adopts the relay-only variant of the spec.
 
 ## Known limitations / next steps (only build if actually needed)
 

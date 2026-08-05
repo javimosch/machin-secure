@@ -989,6 +989,199 @@ func cmd_suppress(a) {
 	exit(0)
 }
 
+// ---- `secure guide` subcommand (cli-guide-spec v1.0) ----
+// The embedded mental model: model, loop, concepts, commands, examples, gotchas.
+// JSON by default (agent-first); --human for readable markdown. Embedded in the
+// binary — no network fetch. A pure-CLI tool conforms without HTTP endpoints.
+
+func guide_json() (g) {
+	g = "{"
+	g = g + "\"machin-secure\":\"a free, deterministic, agent-first security scanner (1000 rules, 25 languages, SARIF to GitHub)\","
+	g = g + "\"one_liner\":\"A regex-based SAST that runs in your CI on every push for free — no per-developer seat tax, no LLM API calls, your code never leaves your runner. The scan loop is deterministic; the judgment (triage, false-positive suppression) is BYOK — your agent or your engineer decides, and the tool persists the verdict.\","
+	g = g + "\"model\":{"
+	g = g + "\"split\":\"DETERMINISTIC SCAN LOOP (regex rules, no API calls, free, every push) / BYOK JUDGMENT (your agent or engineer triages findings, files verdicts and suppression patterns that persist across scans). The tool never calls an LLM — the CLI is the agent interface.\","
+	g = g + "\"byok_llm\":\"the operator IS the LLM. secure emits structured findings (JSONL); YOUR agent reads them, judges them, and writes back verdicts via `secure verdict` / `secure suppress`. No API key, no token billing, no network call to a model provider.\","
+	g = g + "\"no_server\":\"pure CLI — no server, no database, no index. The filesystem is scanned fresh every time. The only state that persists is the verdict store and the patterns store (the agent's own memory, not a cache the tool invents).\","
+	g = g + "\"sarif\":\"--sarif emits a SARIF 2.1.0 report for GitHub Code Scanning / the Security tab. JSONL is the default for agent consumption; SARIF is for CI integration.\"},"
+	g = g + "\"loop\":["
+	g = g + "\"secure --target . --diff-base origin/main --pending --context 3  # scan changed files, only unreviewed findings, with ±3 lines of context\","
+	g = g + "\"# agent reads the findings JSONL, applies judgment (keep/drop/suppress pattern)\","
+	g = g + "\"secure verdict --stdin < batch_of_keep_drop.jsonl               # persist individual verdicts\","
+	g = g + "\"secure suppress --rule X --glob '*.vue' --reason 'Vue prop bindings'  # persist a pattern for repeated false positives\","
+	g = g + "\"# next scan: --pending shows only genuinely new findings — suppressed ones stay suppressed\","
+	g = g + "\"# for CI: secure --sarif --diff-base origin/main > results.sarif && upload to GitHub Security tab\"],"
+	g = g + "\"concepts\":{"
+	g = g + "\"finding\":\"a JSONL object: {id, rule, file, line, severity, cwe, message, snippet, verdict, ctx_before, ctx_after}. The id is a stable SHA-256 of (rule|file|trimmed_line) — pass it to `secure verdict`.\","
+	g = g + "\"verdict\":\"the agent's judgment on a specific finding id: 'keep' (confirmed real) or 'drop' (false positive). Dropped findings are suppressed in future scans. Stored in .machin-secure.verdicts.json.\","
+	g = g + "\"suppress_pattern\":\"a rule-level false-positive filter: (rule, glob) → suppress. Instead of dropping 30 individual findings from the same rule on *.vue files, file one pattern and they stay dropped. Stored in .machin-secure.patterns.json.\","
+	g = g + "\"pending\":\"--pending emits only unreviewed findings (verdict == \\\"\\\"), excluding both keep and drop. The agent's work queue — what's new since last triage.\","
+	g = g + "\"context\":\"--context N emits ±N lines of code around each finding as ctx_before/ctx_after arrays, so the agent can triage without a read_file round-trip per finding.\","
+	g = g + "\"diff_base\":\"--diff-base REF scans only files changed vs REF (git diff --name-only REF...HEAD). For CI/PR-scoped scans — fast feedback on what changed.\","
+	g = g + "\"literal_prefilter\":\"each rule has a required literal substring extracted at load time; the scan loop does a cheap contains() before the expensive regex_match. 5.8x speedup on large files, byte-identical findings.\"},"
+	g = g + "\"commands\":{"
+	g = g + "\"scan\":[\"secure --target . [--rules rules.json]\",\"secure --target . --diff-base origin/main\",\"secure --target . --pending --context 3\",\"secure --target . --sarif > results.sarif\",\"secure --target . --summary\"],"
+	g = g + "\"verdict\":[\"secure verdict --target . <id> <keep|drop> [--reason TEXT]\",\"secure verdict --target . --stdin < batch.jsonl\"],"
+	g = g + "\"suppress\":[\"secure suppress --target . --rule RULE --glob GLOB [--reason TEXT]\",\"secure suppress --target . --stdin < batch.jsonl\"],"
+	g = g + "\"introspection\":[\"secure guide\",\"secure guide --human\",\"secure --help\",\"secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note]\"]},"
+	g = g + "\"examples\":["
+	g = g + "{\"goal\":\"scan a PR for new findings\",\"do\":[\"secure --target . --diff-base origin/main --pending --context 3\",\"# agent triages the findings\",\"secure verdict --stdin < keep_drop_batch.jsonl\"]},"
+	g = g + "{\"goal\":\"suppress repeated false positives from one rule\",\"do\":[\"secure suppress --target . --rule js-hardcoded-secret --glob '*.vue' --reason 'Vue prop bindings, not secrets'\",\"secure --target . --pending  # those findings no longer appear\"]},"
+	g = g + "{\"goal\":\"CI: SARIF to GitHub Security tab\",\"do\":[\"secure --target . --diff-base origin/main --sarif > results.sarif\",\"# upload results.sarif via github/codeql-action/upload-sarif\"]},"
+	g = g + "{\"goal\":\"full audit of a repo\",\"do\":[\"secure --target . --context 3  # all findings, with code context\",\"secure --target . --summary  # just the counts\"]}],"
+	g = g + "\"gotchas\":["
+	g = g + "\"POSIX ERE only — no PCRE features like (?!...) lookahead; they silently no-op\","
+	g = g + "\"\\\\d is NOT supported in POSIX ERE (silently fails to match) — use [0-9] instead; \\\\b, \\\\s, \\\\w DO work\","
+	g = g + "\"the tool never calls an LLM — the agent does all triage; the CLI is the agent interface (grepapi split)\","
+	g = g + "\"verdicts and patterns are per-repo (.machin-secure.verdicts.json / .machin-secure.patterns.json) — commit them to share triage across the team\","
+	g = g + "\"--pending takes precedence over --show-all (even with show-all, pending excludes reviewed findings)\","
+	g = g + "\"exit codes: 0 = clean, 1 = error, 2 = high/critical findings present\","
+	g = g + "\"stdout = data (JSONL/SARIF/summary), stderr = nothing or logs — pipe-friendly\","
+	g = g + "\"the scan loop is regex SAST, not taint tracking — use CodeQL for data-flow analysis (it's free for public repos)\"],"
+	g = g + "\"version\":\"" + version + "\","
+	g = g + "\"see_also\":[\"secure --help\",\"secure feedback --help\"]"
+	g = g + "}"
+}
+
+func guide_human() (h) {
+	h = "# machin-secure — agent-first security scanner\n\n"
+	h = h + "A free, deterministic, regex-based SAST: 1000 rules, 25 languages, SARIF to GitHub.\n"
+	h = h + "The scan loop is deterministic and free; the judgment is BYOK — your agent decides.\n\n"
+	h = h + "## The model\n\n"
+	h = h + "- **Deterministic scan loop**: regex rules, no API calls, runs in CI on every push for free.\n"
+	h = h + "- **BYOK judgment**: your agent or engineer triages findings, files verdicts and suppression\n"
+	h = h + "  patterns that persist across scans. The tool never calls an LLM.\n"
+	h = h + "- **No server**: pure CLI, no database, no index. Filesystem scanned fresh every time.\n"
+	h = h + "- **SARIF**: --sarif for GitHub Code Scanning; JSONL (default) for agent consumption.\n\n"
+	h = h + "## The loop\n\n"
+	h = h + "1. `secure --target . --diff-base origin/main --pending --context 3`\n"
+	h = h + "   → only new findings in changed files, each with ±3 lines of context\n"
+	h = h + "2. agent reads findings, applies judgment (keep/drop/suppress pattern)\n"
+	h = h + "3. `secure verdict --stdin < batch.jsonl` → persist individual verdicts\n"
+	h = h + "4. `secure suppress --rule X --glob '*.vue' --reason '...'` → persist a pattern\n"
+	h = h + "5. next scan: --pending shows only genuinely new findings\n\n"
+	h = h + "## Commands\n\n"
+	h = h + "- `secure --target . [flags]` — scan (JSONL by default)\n"
+	h = h + "- `secure verdict <id> <keep|drop>` — persist a finding verdict\n"
+	h = h + "- `secure suppress --rule R --glob G` — persist a suppression pattern\n"
+	h = h + "- `secure guide [--human]` — this guide\n"
+	h = h + "- `secure feedback \"<message>\"` — send feedback to the maintainer\n\n"
+	h = h + "## Key flags\n\n"
+	h = h + "- `--pending` — only unreviewed findings (verdict == \"\")\n"
+	h = h + "- `--context N` — ±N lines of code around each finding\n"
+	h = h + "- `--diff-base REF` — scan only files changed vs REF\n"
+	h = h + "- `--sarif` — SARIF 2.1.0 output for GitHub Security tab\n"
+	h = h + "- `--show-all` — include suppressed findings\n\n"
+	h = h + "## Gotchas\n\n"
+	h = h + "- POSIX ERE only — no `(?!...)` lookahead, no `\\d` (use `[0-9]`)\n"
+	h = h + "- The tool never calls an LLM — the agent does all triage\n"
+	h = h + "- Verdicts/patterns are per-repo — commit them to share across the team\n"
+	h = h + "- Exit codes: 0 = clean, 1 = error, 2 = high/critical findings present\n"
+	h = h + "- Regex SAST, not taint tracking — use CodeQL for data-flow analysis\n\n"
+	h = h + "Version: " + version + "\n"
+}
+
+func cmd_guide(a) {
+	want_human := false
+	help := false
+	i := 2
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--human" { want_human = true }
+		if arg == "--help" || arg == "-h" { help = true }
+		i = i + 1
+	}
+	if help {
+		println("usage: secure guide [--human]")
+		println("")
+		println("Prints the embedded agent skill: the model, the loop, concepts, commands,")
+		println("examples, and gotchas. JSON by default (agent-first); --human for readable")
+		println("markdown. Embedded in the binary — no network fetch.")
+		println("")
+		println("An agent that lands on a fresh machine with only the binary reads this once")
+		println("and drives the tool with no external docs. This is the mental model that")
+		println("--help (the command catalog) cannot be.")
+		return
+	}
+	if want_human {
+		println(guide_human())
+	} else {
+		println(guide_json())
+	}
+}
+
+// ---- `secure feedback` subcommand (cli-feedback-spec v1.0) ----
+// Relay-only adoption (like remotecmd): best-effort POST to the central relay
+// (feedback.intrane.fr), tagged app=machin-secure. Never fails the caller.
+// FEEDBACK_RELAY=off disables. Idempotent on client-generated id.
+
+func cmd_feedback(a) {
+	msg := ""
+	kind := "note"
+	ctx := ""
+	help := false
+
+	i := 2
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--kind" { i = i + 1 ; if i < len(a) { kind = a[i] } }
+		if arg == "--context" { i = i + 1 ; if i < len(a) { ctx = a[i] } }
+		if arg == "--help" || arg == "-h" { help = true }
+		if !has_prefix(arg, "-") && msg == "" { msg = arg }
+		i = i + 1
+	}
+
+	if help {
+		println("usage: secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context \"<what you were doing>\"]")
+		println("")
+		println("Sends feedback to the central relay (feedback.intrane.fr), tagged")
+		println("app=machin-secure. Best-effort — never fails the caller. The relay")
+		println("is open for submission, admin-gated for reading.")
+		println("")
+		println("FEEDBACK_RELAY=off disables the relay write.")
+		println("")
+		println("This is a relay-only adoption (machin-secure has no local feedback endpoint).")
+		return
+	}
+
+	if msg == "" {
+		println("{\"ok\":false,\"error\":\"usage: secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note] [--context TEXT]\"}")
+		exit(1)
+	}
+
+	// client-generated idempotency key: 8 random bytes hex-encoded
+	id := to_hex(rand_bytes(8))
+
+	reporter := env("USER")
+	if reporter == "" { reporter = "agent" }
+
+	// build the submission JSON body
+	body := "{\"message\":" + json(msg)
+	body = body + ",\"app\":\"machin-secure\""
+	body = body + ",\"version\":\"" + version + "\""
+	body = body + ",\"kind\":" + json(kind)
+	body = body + ",\"context\":" + json(ctx)
+	body = body + ",\"reporter\":" + json(reporter)
+	body = body + ",\"id\":" + json(id)
+	body = body + "}"
+
+	relay := env("FEEDBACK_RELAY")
+	if relay == "" { relay = "https://feedback.intrane.fr" }
+
+	relayed := false
+	if relay != "off" {
+		resp := https_post(relay + "/v1/feedback", body)
+		if resp != "" { relayed = true }
+	}
+
+	out := "{\"ok\":true,\"id\":" + json(id) + ",\"relayed\":" + str(bool_to_int(relayed)) + "}"
+	println(out)
+}
+
+func bool_to_int(b) (n) {
+	n = 0
+	if b { n = 1 }
+}
+
 // ---- arg parsing ----
 
 func main() {
@@ -1001,6 +1194,16 @@ func main() {
 
 	if len(a) > 1 && a[1] == "suppress" {
 		cmd_suppress(a)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "guide" {
+		cmd_guide(a)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "feedback" {
+		cmd_feedback(a)
 		return
 	}
 
@@ -1047,6 +1250,8 @@ func main() {
 		println("usage: secure [OPTIONS] [TARGET]")
 		println("       secure verdict --target PATH <id> <keep|drop> [--reason TEXT]")
 		println("       secure suppress --target PATH --rule RULE --glob GLOB [--reason TEXT]")
+		println("       secure guide [--human]")
+		println("       secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context TEXT]")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -1085,6 +1290,12 @@ func main() {
 		println("output: one JSON finding per line on stdout (JSONL). Each finding has a")
 		println("stable \"id\" — pass it to `secure verdict` to keep or drop it.")
 		println("exit:   0 = clean, 1 = error, 2 = high/critical findings present")
+		println("")
+		println("subcommands:")
+		println("  secure guide [--human]   the embedded agent skill (cli-guide-spec): model,")
+		println("                          loop, concepts, commands, examples, gotchas")
+		println("  secure feedback \"<msg>\"  send feedback to the maintainer (cli-feedback-spec)")
+		println("                          — best-effort, never fails. FEEDBACK_RELAY=off to disable")
 		return
 	}
 
