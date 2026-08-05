@@ -20,15 +20,17 @@ type Rule struct {
 }
 
 type Finding struct {
-	id       string
-	rule     string
-	file     string
-	line     int
-	severity string
-	cwe      string
-	message  string
-	snippet  string
-	verdict  string
+	id         string
+	rule       string
+	file       string
+	line       int
+	severity   string
+	cwe        string
+	message    string
+	snippet    string
+	verdict    string
+	ctx_before []string
+	ctx_after  []string
 }
 
 type Run struct {
@@ -73,6 +75,7 @@ var version = "0.1.0"
 var run = Run{findings: []Finding{}}
 var verdict_map = make(map[string]string)
 var want_show_all = false
+var context_n = 0
 // lang -> applicable rules, built once per distinct lang instead of once per
 // file (avoids re-walking all rules for every one of tens of thousands of files)
 var lang_rules_cache = make(map[string][]Rule)
@@ -335,6 +338,32 @@ func rules_for_lang(rules, lang) (out) {
 	lang_rules_cache[lang] = out
 }
 
+// context_lines extracts up to N lines before and after index i from lines,
+// for the --context flag. Returns empty slices when context_n is 0.
+func context_before(lines, i, n) (out) {
+	out = []string{}
+	if n == 0 { return }
+	start := i - n
+	if start < 0 { start = 0 }
+	j := start
+	for j < i {
+		out = append(out, lines[j])
+		j = j + 1
+	}
+}
+
+func context_after(lines, i, n) (out) {
+	out = []string{}
+	if n == 0 { return }
+	end := i + n + 1
+	if end > len(lines) { end = len(lines) }
+	j := i + 1
+	for j < end {
+		out = append(out, lines[j])
+		j = j + 1
+	}
+}
+
 func scan_file(path, lang, rules) {
 	run.scanned = run.scanned + 1
 	src := read_file(path)
@@ -364,15 +393,17 @@ func scan_file(path, lang, rules) {
 				snip := trimmed
 				if len(snip) > 200 { snip = substr(snip, 0, 200) + "..." }
 				f := Finding{
-					id:       id,
-					rule:     rule.id,
-					file:     path,
-					line:     i + 1,
-					severity: rule.severity,
-					cwe:      rule.cwe,
-					message:  rule.message,
-					snippet:  snip,
-					verdict:  v,
+					id:         id,
+					rule:       rule.id,
+					file:       path,
+					line:       i + 1,
+					severity:   rule.severity,
+					cwe:        rule.cwe,
+					message:    rule.message,
+					snippet:    snip,
+					verdict:    v,
+					ctx_before: context_before(lines, i, context_n),
+					ctx_after:  context_after(lines, i, context_n),
 				}
 				run.findings = append(run.findings, f)
 			}
@@ -488,15 +519,17 @@ func scan_into(path, lang, lang_rules, wr_in) (wr) {
 				snip := trimmed
 				if len(snip) > 200 { snip = substr(snip, 0, 200) + "..." }
 				f := Finding{
-					id:       id,
-					rule:     rule.id,
-					file:     path,
-					line:     i + 1,
-					severity: rule.severity,
-					cwe:      rule.cwe,
-					message:  rule.message,
-					snippet:  snip,
-					verdict:  v,
+					id:         id,
+					rule:       rule.id,
+					file:       path,
+					line:       i + 1,
+					severity:   rule.severity,
+					cwe:        rule.cwe,
+					message:    rule.message,
+					snippet:    snip,
+					verdict:    v,
+					ctx_before: context_before(lines, i, context_n),
+					ctx_after:  context_after(lines, i, context_n),
 				}
 				wr.findings = append(wr.findings, f)
 			}
@@ -542,8 +575,15 @@ func parallel_walk(target, rules, workers) {
 // ---- output ----
 
 func emit_jsonl() {
+	// When --context is 0, ctx_before/ctx_after are empty arrays. Strip the
+	// constant suffix to preserve the pre-context output format (byte-identical
+	// findings). When --context N is set, the arrays are populated and the
+	// suffix differs, so the replace is a no-op and the full output is kept.
+	strip := ",\"ctx_before\":[],\"ctx_after\":[]"
 	for _, f := range run.findings {
-		println(json(f))
+		s := json(f)
+		if context_n == 0 { s = replace(s, strip, "") }
+		println(s)
 	}
 }
 
@@ -781,6 +821,7 @@ func main() {
 		if arg == "--diff" { want_diff = true }
 		if arg == "--diff-base" { want_diff = true ; i = i + 1 ; if i < len(a) { diff_base = a[i] } }
 		if arg == "--workers" { i = i + 1 ; if i < len(a) { workers = parse_int(a[i]) } }
+		if arg == "--context" { i = i + 1 ; if i < len(a) { context_n = parse_int(a[i]) } }
 		if arg == "--help" || arg == "-h" { help = true }
 		if has_prefix(arg, "-") == false && target == "" && i > 0 { target = arg }
 		i = i + 1
@@ -808,6 +849,9 @@ func main() {
 		println("  --diff-base REF      scan only files changed vs REF (git diff --name-only REF...HEAD),")
 		println("                       for CI/PR-scoped scans; implies --diff. Target must be a git repo.")
 		println("  --workers N          parallel scan workers for a full directory walk (default: 8)")
+		println("  --context N          include N lines of code before and after each finding as")
+		println("                       ctx_before / ctx_after arrays, so the calling agent can")
+		println("                       triage without a separate read_file round-trip (default: 0)")
 		println("  --hart               print guidance for publishing your own HTML report to")
 		println("                       hart.intrane.fr (default instance). This tool does not")
 		println("                       author or publish the report — your own model does,")

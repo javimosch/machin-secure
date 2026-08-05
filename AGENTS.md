@@ -125,6 +125,13 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   never holds an API key or makes a network call to a model provider — see
   the BYOK split in `~/ai/grepapi` (`/v1/brief`: rules/data here, the
   operator's own LLM completes the reasoning there).
+- **`--context N`** (v2.2.0): emits ±N lines of code around each finding as
+  `ctx_before` / `ctx_after` arrays, so the calling agent can triage without a
+  separate `read_file` round-trip per finding — the single biggest token-cost
+  reducer for the agent loop. Default 0 (off); findings are byte-identical to
+  pre-v2.2.0 when `--context` is not set (the empty arrays are stripped from
+  the JSONL). Works in all scan modes: single-file, `--diff`, `--diff-base`,
+  and parallel directory walk.
 - No index, no database, no run journal. The filesystem is scanned fresh every
   time — freshness over sophistication. The one piece of state that *does*
   persist is the verdict store, and only because it's the agent's own memory,
