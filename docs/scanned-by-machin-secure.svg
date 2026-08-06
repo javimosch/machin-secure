@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="178" height="20" role="img" aria-label="scanned by machin-secure">
+  <linearGradient id="g" x2="0" y2="1">
+    <stop offset="0" stop-color="#3a3a3a"/>
+    <stop offset="1" stop-color="#1a1a1a"/>
+  </linearGradient>
+  <rect width="178" height="20" rx="3" fill="#0f0f0f"/>
+  <rect x="0" y="0" width="118" height="20" rx="3" fill="url(#g)"/>
+  <rect x="114" y="0" width="64" height="20" rx="3" fill="#2d6a2d"/>
+  <text x="6" y="14" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11" fill="#fff">scanned by</text>
+  <text x="122" y="14" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11" font-weight="bold" fill="#fff">machin-secure</text>
+</svg>
