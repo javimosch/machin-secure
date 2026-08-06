@@ -40,6 +40,26 @@ none of the infrastructure, cost, or attack surface.
   contract) pointing the agent at [hart.intrane.fr](https://hart.intrane.fr) —
   the agent authors and publishes its own HTML report with its own model.
 
+## Telemetry
+
+machin-secure collects **anonymous usage counts** — tool, version, which verb
+ran, os/arch, and whether it failed. No identity, no arguments, no file paths,
+no data. The payload is an allow-list (`event.schema.json`); anything not on it
+is structurally absent.
+
+- **Disclosed on stderr** before the first send. `secure telemetry` prints the
+  exact next payload — inspectable, not trustable.
+- **Disabled by default in CI** (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`,
+  `BUILDKITE`).
+- **Off-switches:** `MACHIN_SECURE_TELEMETRY=0`, `DO_NOT_TRACK=1`,
+  `secure telemetry --off` (persisted).
+- **Endpoint override:** `MACHIN_SECURE_TELEMETRY_URL` (default:
+  `https://feedback.intrane.fr/v1/telemetry`).
+- **Bounded:** 2s timeout, no retry, silent on failure, never changes exit code.
+
+See [cli-telemetry-spec](https://github.com/javimosch/cli-telemetry-spec) for
+the full protocol.
+
 ## Usage
 
 ```sh

@@ -196,6 +196,19 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   never blocks. `MACHIN_SECURE_NO_NUDGE=1` disables it. The release workflow
   publishes `version.json` (with `sha256[:12]` of the tarball) to both the version
   tag and the moving `v2` tag release.
+- **`secure telemetry`** (v2.5.0, cli-telemetry-spec v1.0): honest, opt-out,
+  allow-listed usage counts. Sends `tool`, `version`, `event` (install/run/error),
+  `verb`, `os`, `arch`, `exit_class`, `ts` — no identity, no arguments, no data.
+  Disclosed on stderr before the first send (4-line notice, once per machine).
+  Disabled by default in CI (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`).
+  Off-switches (checked before any network code): `MACHIN_SECURE_TELEMETRY=0`,
+  `DO_NOT_TRACK=1`, `secure telemetry --off` (persisted). Endpoint overridable
+  via `MACHIN_SECURE_TELEMETRY_URL` (default: `https://feedback.intrane.fr/v1/telemetry`).
+  `secure telemetry` prints the exact next payload (from the same code path that
+  sends) — inspectable, not trustable. Bounded: 2s timeout, no retry, silent on
+  failure, never changes exit code. No `install_id` (omitting is the safer default).
+  The version nudge also respects `DO_NOT_TRACK` and CI markers, so `DO_NOT_TRACK=1`
+  produces zero outbound connections (verifiable with `strace -f -e trace=connect`).
 
 ## Known limitations / next steps (only build if actually needed)
 

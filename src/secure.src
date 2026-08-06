@@ -114,6 +114,7 @@ func fail(code, typ, msg, suggestion) {
 	if rec { rec_s = "true" }
 	body := "{\"ok\":false,\"error\":{\"code\":" + str(code) + ",\"type\":" + json(typ) + ",\"message\":" + json(msg) + ",\"recoverable\":" + rec_s + ",\"suggestions\":" + sug + "}}"
 	println(body)
+	tel_finish(code)
 	exit(code)
 }
 
@@ -1041,7 +1042,7 @@ func guide_json() (g) {
 	g = g + "\"scan\":[\"secure --target . [--rules rules.json]\",\"secure --target . --diff-base origin/main\",\"secure --target . --pending --context 3\",\"secure --target . --sarif > results.sarif\",\"secure --target . --summary\"],"
 	g = g + "\"verdict\":[\"secure verdict --target . <id> <keep|drop> [--reason TEXT]\",\"secure verdict --target . --stdin < batch.jsonl\"],"
 	g = g + "\"suppress\":[\"secure suppress --target . --rule RULE --glob GLOB [--reason TEXT]\",\"secure suppress --target . --stdin < batch.jsonl\"],"
-	g = g + "\"introspection\":[\"secure guide\",\"secure guide --human\",\"secure --help\",\"secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note]\"]},"
+	g = g + "\"introspection\":[\"secure guide\",\"secure guide --human\",\"secure --help\",\"secure help-json\",\"secure telemetry\",\"secure update --check\",\"secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note]\"]},"
 	g = g + "\"examples\":["
 	g = g + "{\"goal\":\"scan a PR for new findings\",\"do\":[\"secure --target . --diff-base origin/main --pending --context 3\",\"# agent triages the findings\",\"secure verdict --stdin < keep_drop_batch.jsonl\"]},"
 	g = g + "{\"goal\":\"suppress repeated false positives from one rule\",\"do\":[\"secure suppress --target . --rule js-hardcoded-secret --glob '*.vue' --reason 'Vue prop bindings, not secrets'\",\"secure --target . --pending  # those findings no longer appear\"]},"
@@ -1055,7 +1056,8 @@ func guide_json() (g) {
 	g = g + "\"--pending takes precedence over --show-all (even with show-all, pending excludes reviewed findings)\","
 	g = g + "\"exit codes: 0 = clean, 1 = error, 2 = high/critical findings present\","
 	g = g + "\"stdout = data (JSONL/SARIF/summary), stderr = nothing or logs — pipe-friendly\","
-	g = g + "\"the scan loop is regex SAST, not taint tracking — use CodeQL for data-flow analysis (it's free for public repos)\"],"
+	g = g + "\"the scan loop is regex SAST, not taint tracking — use CodeQL for data-flow analysis (it's free for public repos)\","
+	g = g + "\"telemetry: anonymous usage counts (tool, version, verb, os/arch, exit_class) — no identity, args or data. Disable: MACHIN_SECURE_TELEMETRY=0 or DO_NOT_TRACK=1. Inspect: secure telemetry. Disabled in CI by default\"],"
 	g = g + "\"version\":\"" + version + "\","
 	g = g + "\"see_also\":[\"secure --help\",\"secure feedback --help\"]"
 	g = g + "}"
@@ -1215,6 +1217,7 @@ func cmd_help_json(a) {
 	h = h + "\"guide\":{\"args\":[],\"flags\":[\"--human\"],\"auth\":false},"
 	h = h + "\"feedback\":{\"args\":[\"<message>\"],\"flags\":[\"--kind bug|idea|praise|note\",\"--context TEXT\"],\"auth\":false},"
 	h = h + "\"update\":{\"args\":[],\"flags\":[\"--check\",\"--force\"],\"auth\":false},"
+	h = h + "\"telemetry\":{\"args\":[],\"flags\":[\"--off\"],\"auth\":false},"
 	h = h + "\"help-json\":{\"args\":[],\"flags\":[],\"auth\":false}"
 	h = h + "},"
 	h = h + "\"exit_codes\":{"
@@ -1227,7 +1230,7 @@ func cmd_help_json(a) {
 	h = h + "\"100\":\"external/integration error (relay unreachable)\","
 	h = h + "\"110\":\"internal error / bug\""
 	h = h + "},"
-	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\",\"MACHIN_SECURE_NO_NUDGE\"],"
+	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\",\"MACHIN_SECURE_NO_NUDGE\",\"MACHIN_SECURE_TELEMETRY\",\"MACHIN_SECURE_TELEMETRY_URL\",\"DO_NOT_TRACK\"],"
 	h = h + "\"see_also\":[\"secure guide\",\"secure --help\"]"
 	h = h + "}"
 	println(h)
@@ -1339,6 +1342,7 @@ func cmd_update(a) {
 
 	if want_check {
 		println("{\"ok\":true,\"updated\":false,\"local\":" + json(local_ver) + ",\"remote\":" + json(remote_ver) + ",\"up_to_date\":false}")
+		tel_finish(5)
 		exit(5)
 	}
 
@@ -1450,6 +1454,12 @@ func strip_quotes(s) (r) {
 
 func version_nudge() {
 	if env("MACHIN_SECURE_NO_NUDGE") == "1" { return }
+	if env("DO_NOT_TRACK") == "1" { return }
+	// CI is not a user — don't nudge in automation
+	if env("CI") != "" { return }
+	if env("GITHUB_ACTIONS") != "" { return }
+	if env("GITLAB_CI") != "" { return }
+	if env("BUILDKITE") != "" { return }
 
 	// throttle: check at most once per hour
 	home := env("HOME")
@@ -1500,38 +1510,258 @@ func quote_for_shell(s) (r) {
 	return r
 }
 
+// ---- `secure telemetry` subcommand (cli-telemetry-spec v1.0) ----
+// Honest, opt-out, allow-listed usage counts. No identity, no arguments, no data.
+// Disclosed on stderr before the first send. Disabled by default in CI.
+// Inspectable: `secure telemetry` prints the exact next payload.
+
+var telemetry_endpoint = "https://feedback.intrane.fr/v1/telemetry"
+var current_verb = "scan"
+
+// tel_config_dir returns the tool's config directory (~/.machin-secure).
+func tel_config_dir() (d) {
+	home := env("HOME")
+	if home == "" { home = "/tmp" }
+	d = home + "/.machin-secure"
+	mkdir(d)
+	return d
+}
+
+// tel_enabled returns true if telemetry is enabled, false if any off-switch is set.
+// Checks ALL switches before any network code (spec §2.1).
+func tel_enabled() (ok) {
+	ok = false
+	// DO_NOT_TRACK=1 (cross-vendor convention, MUST honour)
+	dnt := env("DO_NOT_TRACK")
+	if dnt == "1" { return false }
+	// MACHIN_SECURE_TELEMETRY=0/false/off/no
+	tel := env("MACHIN_SECURE_TELEMETRY")
+	if tel == "0" || tel == "false" || tel == "off" || tel == "no" { return false }
+	// persisted off flag
+	cfg := tel_config_dir()
+	off_kind, _, _ := stat(cfg + "/telemetry-off")
+	if off_kind == 1 { return false }
+	// CI is not a user — default disabled in automation (spec §2.2)
+	if env("CI") != "" { return false }
+	if env("CONTINUOUS_INTEGRATION") != "" { return false }
+	if env("GITHUB_ACTIONS") != "" { return false }
+	if env("GITLAB_CI") != "" { return false }
+	if env("BUILDKITE") != "" { return false }
+	return true
+}
+
+// tel_notice prints the 4-line disclosure to stderr, once per machine (spec §1).
+// Uses system("printf ... >&2") because MFL has no stderr builtin.
+func tel_notice() {
+	cfg := tel_config_dir()
+	notice_file := cfg + "/telemetry-notice-shown"
+	nk, _, _ := stat(notice_file)
+	if nk == 1 { return }
+	// print 4-line notice to stderr
+	system("printf '%s\\n' '[telemetry] machin-secure sends anonymous usage counts: tool, version,' '[telemetry] os/arch, which verb ran, and whether it failed. No identity,' '[telemetry] arguments or data. See `secure telemetry` for the exact payload.' '[telemetry] Disable: MACHIN_SECURE_TELEMETRY=0 (or DO_NOT_TRACK=1)' >&2")
+	write_file(notice_file, "1")
+}
+
+// tel_payload builds the JSON payload from the allow-list (spec §3.1).
+// No install_id — omitting it is the safer default (spec §3.3).
+func tel_payload(event, verb, exit_class) (p) {
+	_, os_raw, _ := exec("uname -s")
+	os_raw = trim(os_raw)
+	os_val := to_lower(os_raw)
+	_, arch_raw, _ := exec("uname -m")
+	arch_val := trim(arch_raw)
+	_, ts_raw, _ := exec("date -u +%Y-%m-%dT%H:%M:%SZ")
+	ts_val := trim(ts_raw)
+	p = "{\"tool\":\"machin-secure\",\"version\":\"" + version + "\""
+	p = p + ",\"event\":" + json(event)
+	p = p + ",\"verb\":" + json(verb)
+	p = p + ",\"os\":" + json(os_val)
+	p = p + ",\"arch\":" + json(arch_val)
+	p = p + ",\"exit_class\":" + str(exit_class)
+	p = p + ",\"ts\":" + json(ts_val)
+	p = p + "}"
+	return p
+}
+
+// tel_send sends one event. Bounded (2s timeout), silent, no retry (spec §5).
+// Sends after work completes. A failed send is silent and never changes exit code.
+func tel_send(event, verb, exit_class) {
+	if tel_enabled() == false { return }
+	tel_notice()
+	// check if this is the first run → send "install" instead of "run"/"error"
+	cfg := tel_config_dir()
+	install_file := cfg + "/telemetry-install-sent"
+	ik, _, _ := stat(install_file)
+	actual_event := event
+	if ik != 1 {
+		actual_event = "install"
+		write_file(install_file, "1")
+	}
+	payload := tel_payload(actual_event, verb, exit_class)
+	// write payload to temp file, POST via curl with 2s timeout, silent
+	tmp := "/tmp/ms-tel-" + to_hex(rand_bytes(4)) + ".json"
+	write_file(tmp, payload)
+	endpoint := env("MACHIN_SECURE_TELEMETRY_URL")
+	if endpoint == "" { endpoint = telemetry_endpoint }
+	system("curl -s -m 2 -X POST " + endpoint + " -H 'content-type: application/json' --data-binary @" + tmp + " >/dev/null 2>&1 || true")
+	remove(tmp)
+}
+
+// tel_exit_class maps an exit code to the semantic exit-code CLASS (spec §3.1).
+// 0 and 2 (findings present) → 0 (success). 80-89→80, 90-99→90, 100-109→100, 110+→110.
+func tel_exit_class(code) (c) {
+	c = 0
+	if code == 0 { return 0 }
+	if code == 2 { return 0 }
+	if code == 5 { return 0 }
+	if code >= 80 && code < 90 { return 80 }
+	if code >= 90 && code < 100 { return 90 }
+	if code >= 100 && code < 110 { return 100 }
+	if code >= 110 { return 110 }
+	return 0
+}
+
+// tel_is_error returns true if the exit code represents an error (not success/findings).
+func tel_is_error(code) (e) {
+	e = false
+	if code == 0 { return false }
+	if code == 2 { return false }
+	if code == 5 { return false }
+	return true
+}
+
+// tel_finish sends the appropriate event before exiting. Called at every exit point.
+func tel_finish(code) {
+	if tel_enabled() == false { return }
+	ec := tel_exit_class(code)
+	if tel_is_error(code) {
+		tel_send("error", current_verb, ec)
+	} else {
+		tel_send("run", current_verb, ec)
+	}
+}
+
+// tel_why_disabled returns the reason telemetry is off (spec §6.3).
+func tel_why_disabled() (r) {
+	dnt := env("DO_NOT_TRACK")
+	if dnt == "1" { return "DO_NOT_TRACK=1" }
+	tel := env("MACHIN_SECURE_TELEMETRY")
+	if tel == "0" || tel == "false" || tel == "off" || tel == "no" { return "MACHIN_SECURE_TELEMETRY=" + tel }
+	cfg := tel_config_dir()
+	off_kind, _, _ := stat(cfg + "/telemetry-off")
+	if off_kind == 1 { return "disabled by config (secure telemetry --off)" }
+	if env("CI") != "" { return "CI detected" }
+	if env("CONTINUOUS_INTEGRATION") != "" { return "CI detected" }
+	if env("GITHUB_ACTIONS") != "" { return "CI detected" }
+	if env("GITLAB_CI") != "" { return "CI detected" }
+	if env("BUILDKITE") != "" { return "CI detected" }
+	return "unknown"
+}
+
+func cmd_telemetry(a) {
+	// parse flags
+	i := 2
+	for i < len(a) {
+		arg := a[i]
+		if arg == "--off" {
+			cfg := tel_config_dir()
+			write_file(cfg + "/telemetry-off", "1")
+			println("{\"ok\":true,\"data\":{\"enabled\":false,\"reason\":\"disabled by config\"}}")
+			return
+		}
+		if arg == "--help" || arg == "-h" {
+			println("usage: secure telemetry [--off]")
+			println("")
+			println("Print the exact telemetry payload this tool would send, the endpoint,")
+			println("and whether it is enabled. No identity, arguments or data are sent —")
+			println("only: tool, version, event, verb, os, arch, exit_class, ts.")
+			println("")
+			println("  --off   persist the opt-out (survives future runs)")
+			println("")
+			println("Disable via env: MACHIN_SECURE_TELEMETRY=0 or DO_NOT_TRACK=1")
+			println("Override endpoint: MACHIN_SECURE_TELEMETRY_URL=https://your-collector/e")
+			return
+		}
+		i = i + 1
+	}
+
+	enabled := tel_enabled()
+	endpoint := env("MACHIN_SECURE_TELEMETRY_URL")
+	if endpoint == "" { endpoint = telemetry_endpoint }
+
+	// check if notice has been shown
+	cfg := tel_config_dir()
+	nk, _, _ := stat(cfg + "/telemetry-notice-shown")
+	notice_shown := false
+	if nk == 1 { notice_shown = true }
+
+	// build the actual next payload from the same code path that sends
+	next_payload := tel_payload("run", "telemetry", 0)
+
+	en_s := "false"
+	reason := tel_why_disabled()
+	if enabled { en_s = "true"; reason = "enabled" }
+
+	out := "{\"ok\":true,\"data\":{\"enabled\":" + en_s
+	out = out + ",\"reason\":" + json(reason)
+	out = out + ",\"endpoint\":" + json(endpoint)
+	out = out + ",\"next_payload\":" + next_payload
+	out = out + ",\"disable\":\"MACHIN_SECURE_TELEMETRY=0\""
+	out = out + ",\"notice_shown\":" + str(bool_to_int(notice_shown))
+	out = out + "}}"
+	println(out)
+}
+
 // ---- arg parsing ----
 
 func main() {
 	a := args()
 
 	if len(a) > 1 && a[1] == "verdict" {
+		current_verb = "verdict"
 		cmd_verdict(a)
+		tel_finish(0)
 		return
 	}
 
 	if len(a) > 1 && a[1] == "suppress" {
+		current_verb = "suppress"
 		cmd_suppress(a)
+		tel_finish(0)
 		return
 	}
 
 	if len(a) > 1 && a[1] == "guide" {
+		current_verb = "guide"
 		cmd_guide(a)
+		tel_finish(0)
 		return
 	}
 
 	if len(a) > 1 && a[1] == "feedback" {
+		current_verb = "feedback"
 		cmd_feedback(a)
+		tel_finish(0)
 		return
 	}
 
 	if len(a) > 1 && (a[1] == "help-json" || a[1] == "--help-json") {
+		current_verb = "help-json"
 		cmd_help_json(a)
+		tel_finish(0)
 		return
 	}
 
 	if len(a) > 1 && a[1] == "update" {
+		current_verb = "update"
 		cmd_update(a)
+		tel_finish(0)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "telemetry" {
+		current_verb = "telemetry"
+		cmd_telemetry(a)
 		return
 	}
 
@@ -1586,6 +1816,7 @@ func main() {
 		println("       secure feedback \"<message>\" [--kind bug|idea|praise|note] [--context TEXT]")
 		println("       secure help-json")
 		println("       secure update [--check] [--force]")
+		println("       secure telemetry [--off]")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -1633,6 +1864,9 @@ func main() {
 		println("  secure help-json         machine-readable command catalog (cli-output-spec §4)")
 		println("  secure update [--check]  content-hash self-update (cli-update-spec)")
 		println("                          — verify-then-swap, .bak rollback, no silent auto-update")
+		println("  secure telemetry [--off] anonymous usage counts (cli-telemetry-spec)")
+		println("                          — opt-out, allow-listed, disclosed on stderr. Disable:")
+		println("                          MACHIN_SECURE_TELEMETRY=0 or DO_NOT_TRACK=1")
 		println("  secure feedback \"<msg>\"  send feedback to the maintainer (cli-feedback-spec)")
 		println("                          — best-effort, never fails. FEEDBACK_RELAY=off to disable")
 		return
@@ -1690,6 +1924,7 @@ func main() {
 	for _, f := range run.findings {
 		if f.severity == "critical" || f.severity == "high" { has_high = true }
 	}
-	if has_high { exit(2) }
+	if has_high { tel_finish(2); exit(2) }
+	tel_finish(0)
 	exit(0)
 }
