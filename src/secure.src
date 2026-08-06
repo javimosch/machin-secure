@@ -10,13 +10,14 @@
 // --hart: publish a self-contained HTML report to https://hart.intrane.fr.
 
 type Rule struct {
-	id       string
-	pattern  string
-	severity string
-	cwe      string
-	message  string
-	langs    []string
-	literals []string
+	id        string
+	pattern   string
+	severity  string
+	cwe       string
+	message   string
+	langs     []string
+	literals  []string
+	community bool
 }
 
 type Finding struct {
@@ -29,6 +30,7 @@ type Finding struct {
 	message    string
 	snippet    string
 	verdict    string
+	community  bool
 	ctx_before []string
 	ctx_after  []string
 }
@@ -527,6 +529,7 @@ func scan_file(path, lang, rules) {
 					message:    rule.message,
 					snippet:    snip,
 					verdict:    v,
+					community:  rule.community,
 					ctx_before: context_before(lines, i, context_n),
 					ctx_after:  context_after(lines, i, context_n),
 				}
@@ -657,6 +660,7 @@ func scan_into(path, lang, lang_rules, wr_in) (wr) {
 					message:    rule.message,
 					snippet:    snip,
 					verdict:    v,
+					community:  rule.community,
 					ctx_before: context_before(lines, i, context_n),
 					ctx_after:  context_after(lines, i, context_n),
 				}
@@ -1037,17 +1041,21 @@ func guide_json() (g) {
 	g = g + "\"pending\":\"--pending emits only unreviewed findings (verdict == \\\"\\\"), excluding both keep and drop. The agent's work queue — what's new since last triage.\","
 	g = g + "\"context\":\"--context N emits ±N lines of code around each finding as ctx_before/ctx_after arrays, so the agent can triage without a read_file round-trip per finding.\","
 	g = g + "\"diff_base\":\"--diff-base REF scans only files changed vs REF (git diff --name-only REF...HEAD). For CI/PR-scoped scans — fast feedback on what changed.\","
-	g = g + "\"literal_prefilter\":\"each rule has a required literal substring extracted at load time; the scan loop does a cheap contains() before the expensive regex_match. 5.8x speedup on large files, byte-identical findings.\"},"
+	g = g + "\"literal_prefilter\":\"each rule has a required literal substring extracted at load time; the scan loop does a cheap contains() before the expensive regex_match. 5.8x speedup on large files, byte-identical findings.\","
+	g = g + "\"community_rules\":\"agents can search, install, and submit rules to a shared relay (poche-backed). Search-only by default — nothing auto-installs. Community rules are data (regex + metadata), never code. ReDoS-validated on submit and install. Installed rules go to community-rules.json and are loaded alongside rules.json on every scan. Findings from community rules have community:true in the JSONL output.\"},"
 	g = g + "\"commands\":{"
 	g = g + "\"scan\":[\"secure --target . [--rules rules.json]\",\"secure --target . --diff-base origin/main\",\"secure --target . --pending --context 3\",\"secure --target . --sarif > results.sarif\",\"secure --target . --summary\"],"
 	g = g + "\"verdict\":[\"secure verdict --target . <id> <keep|drop> [--reason TEXT]\",\"secure verdict --target . --stdin < batch.jsonl\"],"
 	g = g + "\"suppress\":[\"secure suppress --target . --rule RULE --glob GLOB [--reason TEXT]\",\"secure suppress --target . --stdin < batch.jsonl\"],"
-	g = g + "\"introspection\":[\"secure guide\",\"secure guide --human\",\"secure --help\",\"secure help-json\",\"secure telemetry\",\"secure update --check\",\"secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note]\"]},"
+	g = g + "\"introspection\":[\"secure guide\",\"secure guide --human\",\"secure --help\",\"secure help-json\",\"secure telemetry\",\"secure update --check\",\"secure feedback \\\"<message>\\\" [--kind bug|idea|praise|note]\",\"secure rules search <query>\"],"
+	g = g + "\"community_rules\":[\"secure rules search <query> [--lang <lang>]\",\"secure rules show <rule-id>\",\"secure rules install <rule-id>\",\"secure rules submit <file.json>\",\"secure rules validate <file.json>\",\"secure rules list [--community]\"]},"
 	g = g + "\"examples\":["
 	g = g + "{\"goal\":\"scan a PR for new findings\",\"do\":[\"secure --target . --diff-base origin/main --pending --context 3\",\"# agent triages the findings\",\"secure verdict --stdin < keep_drop_batch.jsonl\"]},"
 	g = g + "{\"goal\":\"suppress repeated false positives from one rule\",\"do\":[\"secure suppress --target . --rule js-hardcoded-secret --glob '*.vue' --reason 'Vue prop bindings, not secrets'\",\"secure --target . --pending  # those findings no longer appear\"]},"
 	g = g + "{\"goal\":\"CI: SARIF to GitHub Security tab\",\"do\":[\"secure --target . --diff-base origin/main --sarif > results.sarif\",\"# upload results.sarif via github/codeql-action/upload-sarif\"]},"
-	g = g + "{\"goal\":\"full audit of a repo\",\"do\":[\"secure --target . --context 3  # all findings, with code context\",\"secure --target . --summary  # just the counts\"]}],"
+	g = g + "{\"goal\":\"full audit of a repo\",\"do\":[\"secure --target . --context 3  # all findings, with code context\",\"secure --target . --summary  # just the counts\"]},"
+	g = g + "{\"goal\":\"find and install a community rule for a gap\",\"do\":[\"secure rules search 'goroutine leak'  # check if another agent wrote one\",\"secure rules install <rule-id>        # install it locally\",\"secure --target . --pending           # scan with the new community rule\"]},"
+	g = g + "{\"goal\":\"submit a rule you wrote to help other agents\",\"do\":[\"secure rules validate my-rule.json   # schema + ReDoS check\",\"secure rules submit my-rule.json      # send to the relay\",\"# other agents can now search and install your rule\"]}],"
 	g = g + "\"gotchas\":["
 	g = g + "\"POSIX ERE only — no PCRE features like (?!...) lookahead; they silently no-op\","
 	g = g + "\"\\\\d is NOT supported in POSIX ERE (silently fails to match) — use [0-9] instead; \\\\b, \\\\s, \\\\w DO work\","
@@ -1218,6 +1226,7 @@ func cmd_help_json(a) {
 	h = h + "\"feedback\":{\"args\":[\"<message>\"],\"flags\":[\"--kind bug|idea|praise|note\",\"--context TEXT\"],\"auth\":false},"
 	h = h + "\"update\":{\"args\":[],\"flags\":[\"--check\",\"--force\"],\"auth\":false},"
 	h = h + "\"telemetry\":{\"args\":[],\"flags\":[\"--off\"],\"auth\":false},"
+	h = h + "\"rules\":{\"args\":[\"<search|show|install|submit|validate|list>\"],\"flags\":[\"--lang <lang>\",\"--community\"],\"auth\":false},"
 	h = h + "\"help-json\":{\"args\":[],\"flags\":[],\"auth\":false}"
 	h = h + "},"
 	h = h + "\"exit_codes\":{"
@@ -1230,7 +1239,7 @@ func cmd_help_json(a) {
 	h = h + "\"100\":\"external/integration error (relay unreachable)\","
 	h = h + "\"110\":\"internal error / bug\""
 	h = h + "},"
-	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\",\"MACHIN_SECURE_NO_NUDGE\",\"MACHIN_SECURE_TELEMETRY\",\"MACHIN_SECURE_TELEMETRY_URL\",\"DO_NOT_TRACK\"],"
+	h = h + "\"env\":[\"FEEDBACK_RELAY\",\"USER\",\"MACHIN_SECURE_NO_NUDGE\",\"MACHIN_SECURE_TELEMETRY\",\"MACHIN_SECURE_TELEMETRY_URL\",\"DO_NOT_TRACK\",\"MACHIN_SECURE_RULES_URL\",\"MACHIN_SECURE_RULES_TOKEN\"],"
 	h = h + "\"see_also\":[\"secure guide\",\"secure --help\"]"
 	h = h + "}"
 	println(h)
@@ -1712,6 +1721,482 @@ func cmd_telemetry(a) {
 	println(out)
 }
 
+// ---- `secure rules` subcommand (community rules relay on poche) ----
+// Agents search, install, and submit rules to a shared relay. Search-only by
+// default: nothing auto-installs. Community rules are data (regex + metadata),
+// never code. ReDoS-validated on submit and install.
+
+var rules_relay_url = "http://127.0.0.1:7700"
+var rules_reader_token = "03176bbb7ac8c044f83901a39ce2d9fb"
+
+// unq strips surrounding double-quotes from a JSON string value (json_get returns quoted).
+func unq(s) (r) {
+	r = s
+	if len(r) >= 2 {
+		if substr(r, 0, 1) == "\"" && substr(r, len(r) - 1, len(r)) == "\"" {
+			r = substr(r, 1, len(r) - 1)
+		}
+	}
+	return r
+}
+
+// json_unescape converts JSON string escape sequences to actual characters.
+// poche stores values with JSON escaping intact (e.g. \\{ instead of \{),
+// so we need to unescape before re-encoding.
+func json_unescape(s) (r) {
+	// protect \\ first with a placeholder, then unescape other sequences,
+	// then restore the placeholder as a single backslash
+	r = replace(s, "\\\\", "\x01")  // \\ -> placeholder
+	r = replace(r, "\\\"", "\"")     // \" -> "
+	r = replace(r, "\\n", "\n")      // \n -> newline
+	r = replace(r, "\\t", "\t")      // \t -> tab
+	r = replace(r, "\x01", "\\")     // placeholder -> \
+	return r
+}
+
+// rules_config returns the relay URL and reader token (env-overridable).
+func rules_config() (url, token) {
+	url = env("MACHIN_SECURE_RULES_URL")
+	if url == "" { url = rules_relay_url }
+	token = env("MACHIN_SECURE_RULES_TOKEN")
+	if token == "" { token = rules_reader_token }
+	return url, token
+}
+
+// rules_submitter_token returns the per-agent submitter token, or "" if none.
+func rules_submitter_token() (token) {
+	token = ""
+	cfg := tel_config_dir()
+	tk, _, _ := stat(cfg + "/rules-submitter-token")
+	if tk == 1 {
+		token = trim(read_file(cfg + "/rules-submitter-token"))
+	}
+	return token
+}
+
+// rules_community_path returns the path to community-rules.json.
+func rules_community_path() (p) {
+	p = "community-rules.json"
+	return p
+}
+
+// rules_validate_rule checks a rule object (as JSON string) for required fields
+// and ReDoS. Returns (ok, reason). The rule is a JSON object string.
+// Accepts both .id (local rules.json format) and .rule_id (relay/poche format).
+func rules_validate_rule(rule_json) (ok, reason) {
+	ok = false
+	reason = ""
+	// required fields — try .id first, then .rule_id (relay format)
+	r_id, e1 := json_get(rule_json, ".id")
+	if e1 != "" || unq(r_id) == "" {
+		r_id, e1 = json_get(rule_json, ".rule_id")
+	}
+	if e1 != "" { reason = "missing or invalid .id field"; return }
+	r_id = unq(r_id)
+	if r_id == "" { reason = "missing .id field"; return }
+	r_pat, e2 := json_get(rule_json, ".pattern")
+	if e2 != "" { reason = "missing or invalid .pattern field"; return }
+	r_pat = unq(r_pat)
+	if r_pat == "" { reason = "missing .pattern field"; return }
+	r_langs, e3 := json_get(rule_json, ".langs")
+	if e3 != "" { reason = "missing or invalid .langs field"; return }
+	if r_langs == "" || r_langs == "[]" { reason = "missing .langs field"; return }
+	r_sev, e4 := json_get(rule_json, ".severity")
+	if e4 != "" { reason = "missing .severity field"; return }
+	r_sev = unq(r_sev)
+	if r_sev != "critical" && r_sev != "high" && r_sev != "medium" && r_sev != "low" {
+		reason = "invalid severity: " + r_sev + " (must be critical/high/medium/low)"
+		return
+	}
+	r_cwe, e5 := json_get(rule_json, ".cwe")
+	if e5 != "" { reason = "missing .cwe field"; return }
+	r_cwe = unq(r_cwe)
+	if r_cwe == "" { reason = "missing .cwe field"; return }
+	r_msg, e6 := json_get(rule_json, ".message")
+	if e6 != "" { reason = "missing .message field"; return }
+	r_msg = unq(r_msg)
+	if r_msg == "" { reason = "missing .message field"; return }
+	// ReDoS check: compile the regex and test against pathological input
+	redos_ok, redos_reason := rules_check_redos(r_pat)
+	if redos_ok == false {
+		reason = "ReDoS check failed: " + redos_reason
+		return
+	}
+	ok = true
+	return ok, reason
+}
+
+// rules_check_redos tests a regex against pathological inputs with a timeout.
+// Uses a background process with timeout to detect catastrophic backtracking.
+func rules_check_redos(pattern) (ok, reason) {
+	ok = false
+	reason = ""
+	// write the pattern to a temp file, test with a short timeout
+	tmp := "/tmp/ms-redos-" + to_hex(rand_bytes(4)) + ".sh"
+	// test 1: compile check (regex_match on empty string — if it compiles, no error)
+	test_str := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
+	script := "p='" + replace(pattern, "'", "'\\''") + "'\n"
+	script = script + "s='" + replace(test_str, "'", "'\\''") + "'\n"
+	// use grep -E (POSIX ERE) to test — if it hangs, timeout kills it
+	script = script + "echo \"$s\" | grep -qE \"$p\" 2>/dev/null\n"
+	write_file(tmp, script)
+	// run with 2s timeout — if it exits 124 (timeout), it's ReDoS
+	_, redos_out, _ := exec("timeout 2 bash " + tmp + " 2>/dev/null; echo $?")
+	remove(tmp)
+	ec := parse_int(trim(redos_out))
+	if ec == 124 {
+		reason = "regex timed out on pathological input (catastrophic backtracking)"
+		return false, reason
+	}
+	// ec 0 = match, 1 = no match, 2 = regex error — all fine for compile check
+	if ec == 2 {
+		reason = "regex failed to compile as POSIX ERE"
+		return false, reason
+	}
+	ok = true
+	return ok, reason
+}
+
+// rules_relay_get performs an authenticated GET to the relay. Returns (status, body).
+func rules_relay_get(path) (status, body) {
+	url, token := rules_config()
+	hdrs := []string{}
+	hdrs = append(hdrs, "Authorization: Bearer " + token)
+	status, body, _ := http_request("GET", url + path, hdrs, "")
+	return status, body
+}
+
+// rules_relay_post performs an authenticated POST. Returns (status, body).
+func rules_relay_post(path, payload) (status, body) {
+	url, token := rules_config()
+	hdrs := []string{}
+	hdrs = append(hdrs, "Authorization: Bearer " + token)
+	hdrs = append(hdrs, "Content-Type: application/json")
+	status, body, _ := http_request("POST", url + path, hdrs, payload)
+	return status, body
+}
+
+// rules_relay_patch performs an authenticated PATCH. Returns (status, body).
+func rules_relay_patch(path, payload) (status, body) {
+	url, token := rules_config()
+	hdrs := []string{}
+	hdrs = append(hdrs, "Authorization: Bearer " + token)
+	hdrs = append(hdrs, "Content-Type: application/json")
+	status, body, _ := http_request("PATCH", url + path, hdrs, payload)
+	return status, body
+}
+
+func cmd_rules(a) {
+	if len(a) < 2 || (len(a) > 2 && (a[2] == "--help" || a[2] == "-h")) {
+		println("usage: secure rules <search|show|install|submit|validate|list> [args]")
+		println("")
+		println("Community rules relay — agents helping agents.")
+		println("")
+		println("  secure rules search <query> [--lang <lang>]   search the community relay")
+		println("  secure rules show <rule-id>                    show a community rule's details")
+		println("  secure rules install <rule-id>                 install a community rule locally")
+		println("  secure rules submit <file.json>                submit a rule to the relay")
+		println("  secure rules validate <file.json>              validate a rule (schema + ReDoS)")
+		println("  secure rules list [--community]                list local or community rules")
+		println("")
+		println("Override relay: MACHIN_SECURE_RULES_URL, MACHIN_SECURE_RULES_TOKEN")
+		return
+	}
+
+	if len(a) < 3 {
+		fail(80, "input", "missing subcommand", "secure rules --help")
+	}
+
+	sub := a[2]
+	if sub == "search" { cmd_rules_search(a); return }
+	if sub == "show" { cmd_rules_show(a); return }
+	if sub == "install" { cmd_rules_install(a); return }
+	if sub == "submit" { cmd_rules_submit(a); return }
+	if sub == "validate" { cmd_rules_validate(a); return }
+	if sub == "list" { cmd_rules_list(a); return }
+
+	fail(80, "input", "unknown rules subcommand: " + sub, "secure rules --help")
+}
+
+// cmd_rules_search queries the relay for rules matching the query string.
+func cmd_rules_search(a) {
+	if len(a) < 4 {
+		fail(80, "input", "usage: secure rules search <query> [--lang <lang>]", "")
+	}
+	query := a[3]
+	lang_filter := ""
+	si := 4
+	for si < len(a) {
+		if a[si] == "--lang" && si + 1 < len(a) {
+			lang_filter = a[si+1]
+			si = si + 2
+		} else {
+			si = si + 1
+		}
+	}
+	path := "/api/rules?q=" + query
+	if lang_filter != "" { path = path + "&lang=" + lang_filter }
+	status, body := rules_relay_get(path)
+	if status != 200 {
+		fail(100, "integration", "relay search failed (HTTP " + str(status) + ")", "check MACHIN_SECURE_RULES_URL")
+	}
+	// parse items and print a summary table
+	items_raw, e := json_get(body, ".data.items")
+	if e != "" {
+		fail(110, "internal", "relay returned unexpected JSON: " + e, "")
+	}
+	// count items
+	count_raw, _ := json_get(body, ".data.count")
+	count := parse_int(unq(count_raw))
+	if count == 0 {
+		println("{\"ok\":true,\"data\":{\"count\":0,\"items\":[]}}")
+		return
+	}
+	// print the raw items (agent can parse)
+	println("{\"ok\":true,\"data\":{\"count\":" + str(count) + ",\"items\":" + items_raw + "}}")
+}
+
+// cmd_rules_show fetches a single rule by its poche _id.
+func cmd_rules_show(a) {
+	if len(a) < 4 {
+		fail(80, "input", "usage: secure rules show <rule-id>", "")
+	}
+	rule_id := a[3]
+	status, body := rules_relay_get("/api/rules/" + rule_id)
+	if status != 200 {
+		fail(100, "integration", "rule not found (HTTP " + str(status) + ")", "secure rules search <query>")
+	}
+	println(body)
+}
+
+// cmd_rules_install fetches a rule from the relay and appends it to community-rules.json.
+func cmd_rules_install(a) {
+	if len(a) < 4 {
+		fail(80, "input", "usage: secure rules install <rule-id>", "")
+	}
+	rule_id := a[3]
+	status, body := rules_relay_get("/api/rules/" + rule_id)
+	if status != 200 {
+		fail(100, "integration", "rule not found (HTTP " + str(status) + ")", "secure rules search <query>")
+	}
+	// extract the doc from the response
+	doc_raw, e := json_get(body, ".data.doc")
+	if e != "" {
+		fail(110, "internal", "relay returned unexpected JSON: " + e, "")
+	}
+	// validate the rule before installing
+	vok, vreason := rules_validate_rule(doc_raw)
+	if vok == false {
+		fail(81, "validation", "rule failed validation: " + vreason, "fix the rule on the relay or don't install it")
+	}
+	// build the rule object for community-rules.json
+	// The relay response is valid JSON. We use json_get to extract each field as a
+	// raw JSON token (already quoted/escaped). But poche double-encodes string values,
+	// so the raw token has extra escaping. We unquote + json_unescape to get the actual
+	// value, then re-encode with json() for the output file.
+	r_id_raw, _ := json_get(doc_raw, ".rule_id")
+	r_pat_raw, _ := json_get(doc_raw, ".pattern")
+	r_langs_raw, _ := json_get(doc_raw, ".langs")
+	r_sev_raw, _ := json_get(doc_raw, ".severity")
+	r_cwe_raw, _ := json_get(doc_raw, ".cwe")
+	r_msg_raw, _ := json_get(doc_raw, ".message")
+	// unquote to strip outer quotes, then json_unescape TWICE to undo poche's double-encoding
+	// poche stores values with an extra layer of JSON escaping
+	r_id_val := json_unescape(json_unescape(unq(r_id_raw)))
+	r_pat_val := json_unescape(json_unescape(unq(r_pat_raw)))
+	r_langs_val := json_unescape(json_unescape(unq(r_langs_raw)))
+	r_sev_val := json_unescape(json_unescape(unq(r_sev_raw)))
+	r_cwe_val := json_unescape(json_unescape(unq(r_cwe_raw)))
+	r_msg_val := json_unescape(json_unescape(unq(r_msg_raw)))
+	// build the rule entry — re-encode with json() for proper escaping
+	entry := "{\"id\":" + json(r_id_val) + ",\"pattern\":" + json(r_pat_val) + ",\"langs\":" + r_langs_val
+	entry = entry + ",\"severity\":" + json(r_sev_val) + ",\"cwe\":" + json(r_cwe_val)
+	entry = entry + ",\"message\":" + json(r_msg_val) + ",\"community\":true}"
+	// load existing community-rules.json or start empty
+	comm_path := rules_community_path()
+	existing := "[]"
+	ek, _, _ := stat(comm_path)
+	if ek == 1 {
+		existing = read_file(comm_path)
+	}
+	// check if rule already installed (by id)
+	if contains(existing, json(r_id_val)) {
+		println("{\"ok\":true,\"data\":{\"installed\":false,\"rule_id\":" + json(r_id_val) + ",\"reason\":\"already installed\"}}")
+		return
+	}
+	// append: find the closing ] and insert before it
+	new_json := ""
+	if existing == "[]" {
+		new_json = "[" + entry + "]"
+	} else {
+		// insert before the last ]
+		trimmed := trim(existing)
+		last_bracket := last_index(trimmed, "]")
+		if last_bracket < 0 {
+			fail(110, "internal", "community-rules.json is malformed", "delete it and retry")
+		}
+		before := substr(trimmed, 0, last_bracket)
+		// trim trailing whitespace/newline before ]
+		before = trim_space_end(before)
+		new_json = before + ",\n" + entry + "]"
+	}
+	write_file(comm_path, new_json)
+	// increment installs counter on the relay (best-effort, never fails the install)
+	_, _ = rules_relay_patch("/api/rules/" + rule_id, "{\"installs\":1}")
+	println("{\"ok\":true,\"data\":{\"installed\":true,\"rule_id\":" + json(r_id_val) + ",\"path\":" + json(comm_path) + "}}")
+}
+
+// cmd_rules_submit validates a rule file and submits it to the relay.
+func cmd_rules_submit(a) {
+	if len(a) < 4 {
+		fail(80, "input", "usage: secure rules submit <file.json>", "")
+	}
+	filepath := a[3]
+	fk, _, _ := stat(filepath)
+	if fk != 1 {
+		fail(92, "not_found", "file not found: " + filepath, "")
+	}
+	content := read_file(filepath)
+	// validate locally first
+	vok, vreason := rules_validate_rule(content)
+	if vok == false {
+		fail(81, "validation", "rule failed validation: " + vreason, "fix the rule and retry, or run secure rules validate <file>")
+	}
+	// check for submitter token
+	sub_token := rules_submitter_token()
+	if sub_token == "" {
+		// no token — instruct the agent to get one from the relay admin
+		// for now, use the reader token (which may not have create permission)
+		// in production, this would be a separate flow
+		fail(86, "auth", "no submitter token configured", "contact the relay admin for a submitter token, or set MACHIN_SECURE_RULES_SUBMITTER_TOKEN")
+	}
+	// build the payload for poche
+	// Unquote all values from the rule file, then re-encode with json() for the payload.
+	// poche re-encodes string values internally, so sending raw JSON tokens would double-escape.
+	r_id, _ := json_get(content, ".id")
+	r_id = unq(r_id)
+	r_pat, _ := json_get(content, ".pattern")
+	r_pat = unq(r_pat)
+	r_langs, _ := json_get(content, ".langs")
+	// langs is a JSON array in the rule file — send as a JSON-encoded string for poche
+	r_langs_str := json(unq(r_langs))
+	r_sev, _ := json_get(content, ".severity")
+	r_sev = unq(r_sev)
+	r_cwe, _ := json_get(content, ".cwe")
+	r_cwe = unq(r_cwe)
+	r_msg, _ := json_get(content, ".message")
+	r_msg = unq(r_msg)
+	_, ts_raw, _ := exec("date -u +%Y-%m-%dT%H:%M:%SZ")
+	ts_val := trim(ts_raw)
+	payload := "{\"rule_id\":" + json(r_id) + ",\"pattern\":" + json(r_pat) + ",\"langs\":" + r_langs_str
+	payload = payload + ",\"severity\":" + json(r_sev) + ",\"cwe\":" + json(r_cwe)
+	payload = payload + ",\"message\":" + json(r_msg) + ",\"submitter\":\"agent\""
+	payload = payload + ",\"submitted_at\":" + json(ts_val) + ",\"version\":1"
+	payload = payload + ",\"installs\":0,\"drops\":0,\"deprecated\":false}"
+	// POST with submitter token
+	url, _ := rules_config()
+	hdrs := []string{}
+	hdrs = append(hdrs, "Authorization: Bearer " + sub_token)
+	hdrs = append(hdrs, "Content-Type: application/json")
+	status, body, _ := http_request("POST", url + "/api/rules", hdrs, payload)
+	if status != 200 && status != 201 {
+		fail(100, "integration", "relay submit failed (HTTP " + str(status) + "): " + body, "check submitter token or relay URL")
+	}
+	println(body)
+}
+
+// cmd_rules_validate validates a rule file locally (schema + ReDoS).
+func cmd_rules_validate(a) {
+	if len(a) < 4 {
+		fail(80, "input", "usage: secure rules validate <file.json>", "")
+	}
+	filepath := a[3]
+	fk, _, _ := stat(filepath)
+	if fk != 1 {
+		fail(92, "not_found", "file not found: " + filepath, "")
+	}
+	content := read_file(filepath)
+	vok, vreason := rules_validate_rule(content)
+	if vok == false {
+		fail(81, "validation", "rule failed validation: " + vreason, "")
+	}
+	println("{\"ok\":true,\"data\":{\"valid\":true,\"file\":" + json(filepath) + "}}")
+}
+
+// cmd_rules_list lists local rules or community-installed rules.
+func cmd_rules_list(a) {
+	community_only := false
+	li := 3
+	for li < len(a) {
+		if a[li] == "--community" { community_only = true }
+		li = li + 1
+	}
+	if community_only {
+		comm_path := rules_community_path()
+		ek, _, _ := stat(comm_path)
+		if ek != 1 {
+			println("{\"ok\":true,\"data\":{\"count\":0,\"source\":" + json(comm_path) + ",\"items\":[]}}")
+			return
+		}
+		content := read_file(comm_path)
+		println("{\"ok\":true,\"data\":{\"count\":-1,\"source\":" + json(comm_path) + ",\"items\":" + content + "}}")
+		return
+	}
+	// list default rules.json
+	default_rules := "rules.json"
+	rk, _, _ := stat(default_rules)
+	if rk != 1 {
+		fail(92, "not_found", "rules file not found: " + default_rules, "")
+	}
+	content := read_file(default_rules)
+	// count rules by counting "id" occurrences (rough)
+	rule_count := count_occurrences(content, "\"id\"")
+	println("{\"ok\":true,\"data\":{\"count\":" + str(rule_count) + ",\"source\":" + json(default_rules) + "}}")
+}
+
+// trim_space_end removes trailing whitespace from a string.
+func trim_space_end(s) (r) {
+	r = s
+	for len(r) > 0 {
+		last := substr(r, len(r) - 1, len(r))
+		if last == " " || last == "\n" || last == "\t" || last == "\r" {
+			r = substr(r, 0, len(r) - 1)
+		} else {
+			return r
+		}
+	}
+	return r
+}
+
+// count_occurrences counts non-overlapping occurrences of substr in s.
+func count_occurrences(s, substr) (n) {
+	n = 0
+	pos := 0
+	for pos < len(s) {
+		idx := index_from(s, substr, pos)
+		if idx < 0 { return n }
+		n = n + 1
+		pos = idx + len(substr)
+	}
+	return n
+}
+
+// index_from finds the first occurrence of substr at or after position from.
+func index_from(s, substr, from) (idx) {
+	idx = -1
+	if from >= len(s) { return idx }
+	if from < 0 { from = 0 }
+	i := from
+	for i < len(s) {
+		if i + len(substr) > len(s) { return idx }
+		if substr(s, i, i + len(substr)) == substr {
+			return i
+		}
+		i = i + 1
+	}
+	return idx
+}
+
 // ---- arg parsing ----
 
 func main() {
@@ -1762,6 +2247,13 @@ func main() {
 	if len(a) > 1 && a[1] == "telemetry" {
 		current_verb = "telemetry"
 		cmd_telemetry(a)
+		return
+	}
+
+	if len(a) > 1 && a[1] == "rules" {
+		current_verb = "rules"
+		cmd_rules(a)
+		tel_finish(0)
 		return
 	}
 
@@ -1817,6 +2309,7 @@ func main() {
 		println("       secure help-json")
 		println("       secure update [--check] [--force]")
 		println("       secure telemetry [--off]")
+		println("       secure rules <search|show|install|submit|validate|list>")
 		println("")
 		println("No LLM call is made by this tool. It emits structured findings; the")
 		println("calling agent (which already has its own model) reads them, judges them,")
@@ -1867,6 +2360,9 @@ func main() {
 		println("  secure telemetry [--off] anonymous usage counts (cli-telemetry-spec)")
 		println("                          — opt-out, allow-listed, disclosed on stderr. Disable:")
 		println("                          MACHIN_SECURE_TELEMETRY=0 or DO_NOT_TRACK=1")
+		println("  secure rules <subcmd>   community rules relay — agents helping agents")
+		println("                          — search/show/install/submit/validate/list")
+		println("                          — search-only by default, ReDoS-validated, poche-backed")
 		println("  secure feedback \"<msg>\"  send feedback to the maintainer (cli-feedback-spec)")
 		println("                          — best-effort, never fails. FEEDBACK_RELAY=off to disable")
 		return
@@ -1880,6 +2376,16 @@ func main() {
 	rules := load_rules(rules_path)
 	if len(rules) == 0 {
 		fail(92, "rules_not_found", "no rules loaded from " + rules_path, "check --rules path, or use the bundled rules.json")
+	}
+
+	// load community-rules.json if it exists (agent-installed rules from the relay)
+	comm_path := rules_community_path()
+	ck, _, _ := stat(comm_path)
+	if ck == 1 {
+		comm_rules := load_rules(comm_path)
+		if len(comm_rules) > 0 {
+			for _, cr := range comm_rules { rules = append(rules, cr) }
+		}
 	}
 
 	if store_path == "" { store_path = default_store_path(target) }

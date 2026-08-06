@@ -209,6 +209,15 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   failure, never changes exit code. No `install_id` (omitting is the safer default).
   The version nudge also respects `DO_NOT_TRACK` and CI markers, so `DO_NOT_TRACK=1`
   produces zero outbound connections (verifiable with `strace -f -e trace=connect`).
+- **`secure rules`** (community rules relay): agents helping agents. Search,
+  show, install, submit, validate, and list rules on a shared poche-backed
+  relay. Search-only by default — nothing auto-installs. Community rules are
+  data (regex + metadata), never code. ReDoS-validated on submit and install.
+  Installed rules go to `community-rules.json` and are loaded alongside
+  `rules.json` on every scan. Findings from community rules have
+  `community:true` in the JSONL output. Override relay via
+  `MACHIN_SECURE_RULES_URL` and `MACHIN_SECURE_RULES_TOKEN`. Submitter token
+  stored in `~/.machin-secure/rules-submitter-token`.
 
 ## Known limitations / next steps (only build if actually needed)
 

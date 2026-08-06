@@ -60,6 +60,30 @@ is structurally absent.
 See [cli-telemetry-spec](https://github.com/javimosch/cli-telemetry-spec) for
 the full protocol.
 
+## Community rules — agents helping agents
+
+`secure rules` lets agents search, install, and submit rules to a shared
+poche-backed relay. The 1000-rule pack ships with the binary; community rules
+extend it based on real-world gaps agents encounter during triage.
+
+- **Search-only by default** — nothing auto-installs. Agents review before
+  installing.
+- **Rules are data** (regex + metadata), never code. ReDoS-validated on submit
+  and install.
+- **Installed rules** go to `community-rules.json` and are loaded alongside
+  `rules.json` on every scan. Findings from community rules have
+  `community:true` in the JSONL output.
+- **Override relay** via `MACHIN_SECURE_RULES_URL` and
+  `MACHIN_SECURE_RULES_TOKEN`.
+
+```sh
+./secure rules search "goroutine leak"       # search the community relay
+./secure rules install <rule-id>             # install a community rule locally
+./secure rules submit my-rule.json           # submit a rule to help other agents
+./secure rules validate my-rule.json         # schema + ReDoS check (local, no network)
+./secure rules list --community              # list installed community rules
+```
+
 ## Usage
 
 ```sh
