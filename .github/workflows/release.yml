@@ -17,6 +17,12 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v2.6.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write   # create releases, move the major tag
@@ -30,8 +36,14 @@ jobs:
     # on ubuntu-latest (24.04, glibc 2.39) would emit GLIBC_2.38 symbols and
     # break users who pin runs-on: ubuntu-22.04.
     runs-on: ubuntu-22.04
+    env:
+      # When triggered by tag push, github.ref_name is the tag (e.g. v2.6.0).
+      # When triggered by workflow_dispatch, inputs.tag is the tag.
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Install build deps (Go + C compiler)
         run: |
@@ -74,7 +86,7 @@ jobs:
       - name: Bundle binary + rules
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${RELEASE_TAG}"
           mkdir -p dist/machin-secure
           cp secure dist/machin-secure/secure
           cp rules.json dist/machin-secure/rules.json
@@ -103,7 +115,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${RELEASE_TAG}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/machin-secure-${TAG}-linux-amd64.tar.gz dist/SHA256SUMS.txt dist/version.json --clobber
           else
@@ -116,7 +128,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"        # e.g. v2.0.0
+          TAG="${RELEASE_TAG}"        # e.g. v2.0.0
           MAJOR="${TAG%%.*}"              # e.g. v2
           SHA="$(git rev-parse "$TAG^{commit}")"
           # Move the major tag to the same commit (force, since it's a moving ref).
