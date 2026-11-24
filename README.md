@@ -54,7 +54,7 @@ is structurally absent.
 - **Off-switches:** `MACHIN_SECURE_TELEMETRY=0`, `DO_NOT_TRACK=1`,
   `secure telemetry --off` (persisted).
 - **Endpoint override:** `MACHIN_SECURE_TELEMETRY_URL` (default:
-  `https://feedback.intrane.fr/v1/telemetry`).
+  `https://grange.intrane.fr/t`).
 - **Bounded:** 2s timeout, no retry, silent on failure, never changes exit code.
 
 See [cli-telemetry-spec](https://github.com/javimosch/cli-telemetry-spec) for

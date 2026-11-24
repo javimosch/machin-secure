@@ -203,7 +203,7 @@ findings present. Designed to be piped: `./secure --target . | jq 'select(.sever
   Disabled by default in CI (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`).
   Off-switches (checked before any network code): `MACHIN_SECURE_TELEMETRY=0`,
   `DO_NOT_TRACK=1`, `secure telemetry --off` (persisted). Endpoint overridable
-  via `MACHIN_SECURE_TELEMETRY_URL` (default: `https://feedback.intrane.fr/v1/telemetry`).
+  via `MACHIN_SECURE_TELEMETRY_URL` (default: `https://grange.intrane.fr/t`).
   `secure telemetry` prints the exact next payload (from the same code path that
   sends) — inspectable, not trustable. Bounded: 2s timeout, no retry, silent on
   failure, never changes exit code. No `install_id` (omitting is the safer default).

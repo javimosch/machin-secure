@@ -1524,7 +1524,7 @@ func quote_for_shell(s) (r) {
 // Disclosed on stderr before the first send. Disabled by default in CI.
 // Inspectable: `secure telemetry` prints the exact next payload.
 
-var telemetry_endpoint = "https://feedback.intrane.fr/v1/telemetry"
+var telemetry_endpoint = "https://grange.intrane.fr/t"
 var current_verb = "scan"
 
 // tel_config_dir returns the tool's config directory (~/.machin-secure).
